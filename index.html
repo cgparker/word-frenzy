@@ -37,6 +37,7 @@ body{
 .btn.mango:active{box-shadow:0 2px 0 var(--mango-dk);}
 .btn.small{font-size:18px;padding:12px 26px;border-radius:18px;box-shadow:0 5px 0 var(--palm-dk);}
 .linkish{background:none;border:none;color:rgba(255,255,255,.85);font-family:inherit;font-size:16px;font-weight:600;text-decoration:underline;cursor:pointer;padding:10px;}
+.linkrow{display:flex;gap:4px;align-items:center;justify-content:center;flex-wrap:wrap;}
 
 /* Title */
 .logo{font-size:clamp(44px,10vw,84px);font-weight:700;color:#fff;margin:0;text-shadow:0 5px 0 rgba(0,0,0,.18);}
@@ -90,14 +91,16 @@ body{
 .heard{min-height:28px;margin-top:10px;color:rgba(255,255,255,.9);font-size:18px;font-style:italic;}
 
 .help{
-  position:fixed;right:20px;bottom:22px;width:92px;height:92px;border-radius:50%;
-  font-size:42px;background:var(--mango);box-shadow:0 7px 0 var(--mango-dk);
+  position:fixed;right:20px;bottom:calc(30px + env(safe-area-inset-bottom));
+  width:92px;height:92px;border-radius:50%;
+  background:var(--mango);box-shadow:0 7px 0 var(--mango-dk);
   border:none;cursor:pointer;z-index:6;display:none;
+  flex-direction:column;align-items:center;justify-content:center;gap:3px;
 }
-.help.on{display:block;}
+.help.on{display:flex;}
 .help:active{transform:translateY(5px);box-shadow:0 2px 0 var(--mango-dk);}
-.helplabel{position:fixed;right:24px;bottom:2px;width:84px;text-align:center;color:#fff;font-weight:700;z-index:6;display:none;}
-.helplabel.on{display:block;}
+.hico{font-size:32px;line-height:1;}
+.hlbl{font-size:13px;font-weight:700;color:#5b4300;line-height:1;}
 
 .say{position:fixed;bottom:30px;left:0;right:130px;color:#fff;font-size:24px;font-weight:700;opacity:0;transition:opacity .2s;z-index:6;}
 .say.on{opacity:1;}
@@ -121,6 +124,7 @@ body{
 .stars span.pop{animation:starpop .45s ease-out forwards;}
 @keyframes starpop{0%{transform:scale(.2);opacity:0;}60%{transform:scale(1.4);opacity:1;}100%{transform:scale(1);opacity:1;}}
 .txt{font-family:inherit;font-weight:700;font-size:17px;padding:10px 12px;border:2px solid #cdd7e4;border-radius:12px;width:150px;text-align:center;color:var(--ink);-webkit-user-select:text;user-select:text;}
+select.vsel{width:200px;text-align:left;background:#fff;}
 
 /* Joke card */
 #scrDone{justify-content:flex-start;overflow-y:auto;padding-top:34px;padding-bottom:150px;}
@@ -131,14 +135,13 @@ body{
 
 /* Phone-size polish */
 #scrGame{padding-top:96px;padding-bottom:130px;}
-.help{bottom:calc(22px + env(safe-area-inset-bottom));}
-.helplabel{bottom:calc(2px + env(safe-area-inset-bottom));}
 .playbar{padding-bottom:calc(18px + env(safe-area-inset-bottom));}
 .linkish{margin-top:10px;}
 .panel{max-height:86vh;overflow-y:auto;}
 @media (max-width:540px){
-  .help{width:70px;height:70px;font-size:32px;right:14px;}
-  .helplabel{right:14px;width:70px;font-size:14px;}
+  .help{width:74px;height:74px;right:14px;}
+  .hico{font-size:26px;}
+  .hlbl{font-size:12px;}
   .say{left:14px;right:96px;font-size:18px;}
   .card{min-width:88vw;padding:5.5vh 5vw;}
   .microw{margin-top:24px;font-size:17px;}
@@ -188,6 +191,7 @@ body{
 
 <!-- HUD -->
 <div class="hud" id="hud">
+  <button class="icon-btn" id="homeGame" aria-label="Back to main screen">&#127968;</button>
   <div class="chip" id="chipLevel">Lv 1</div>
   <div class="pbar"><i id="pfill"></i></div>
   <div class="chip" id="chipLeft">20 left</div>
@@ -213,8 +217,7 @@ body{
   <div class="microw"><div class="ring" id="ring">&#127908;</div><span id="micLabel">Listening...</span></div>
   <div class="heard" id="heard"></div>
 </div>
-<button class="help" id="btnHelp" aria-label="Say the word for me">&#128266;</button>
-<div class="helplabel" id="helpLabel">Help</div>
+<button class="help" id="btnHelp" aria-label="Say the word for me"><span class="hico">&#128266;</span><span class="hlbl">Help</span></button>
 <div class="say" id="sayBanner">Listen... then say it with me!</div>
 
 <!-- Done -->
@@ -229,7 +232,10 @@ body{
     <div class="jpunch" id="jokePunch"></div>
     <button class="btn small mango" id="btnJokeAgain">Hear it again</button>
   </div>
-  <button class="linkish" id="gearDone">Parent settings</button>
+  <div class="linkrow">
+    <button class="linkish" id="homeDone">Main screen</button>
+    <button class="linkish" id="gearDone">Parent settings</button>
+  </div>
   <div class="playbar">
     <small id="nextLevel">Level 2 is ready</small>
     <button class="btn" id="btnAgain">Another round!</button>
@@ -250,6 +256,10 @@ body{
     <div class="row">
       <label>Player name</label>
       <input class="txt" id="nameVal" maxlength="14">
+    </div>
+    <div class="row">
+      <label>Voice</label>
+      <select class="txt vsel" id="voiceSel"></select>
     </div>
     <div class="row">
       <label>Seconds per card</label>
@@ -280,7 +290,7 @@ body{
 <script>
 "use strict";
 
-var APP_VERSION = "v1.5 (2026-08-02)";
+var APP_VERSION = "v1.8 (2026-08-02)";
 
 /* ---------- Data ---------- */
 var FRY = [
@@ -369,6 +379,7 @@ if(!state.secs) state.secs = 10;
 if(state.showHeard === undefined) state.showHeard = true;
 if(state.name === undefined) state.name = "Henry";
 if(!state.jokeIds) state.jokeIds = [];
+if(state.voiceName === undefined) state.voiceName = "";
 
 function poolSize(lvl){ return Math.min(9 + lvl, 100); }
 function displayWord(w){ return w === "i" ? "I" : w; }
@@ -458,7 +469,7 @@ function $(id){ return document.getElementById(id); }
 var scrTitle = $("scrTitle"), scrGame = $("scrGame"), scrDone = $("scrDone"), scrErr = $("scrErr");
 var hud = $("hud"), timerEl = $("timer"), tfill = $("tfill");
 var cardEl = $("card"), wordEl = $("word"), ringEl = $("ring"), micLabel = $("micLabel"), heardEl = $("heard");
-var helpBtn = $("btnHelp"), helpLabel = $("helpLabel"), sayBanner = $("sayBanner");
+var helpBtn = $("btnHelp"), sayBanner = $("sayBanner");
 var pfill = $("pfill"), chipLevel = $("chipLevel"), chipLeft = $("chipLeft");
 
 function showScreen(el){
@@ -467,9 +478,7 @@ function showScreen(el){
   el.classList.add("on");
   var inGame = (el === scrGame);
   hud.classList.toggle("on", inGame);
-  timerEl.classList.toggle("on", inGame);
   helpBtn.classList.toggle("on", inGame);
-  helpLabel.classList.toggle("on", inGame);
   if(!inGame) sayBanner.classList.remove("on");
 }
 
@@ -506,13 +515,27 @@ function pickVoice(){
   if(voiceCache) return voiceCache;
   var vs = speechSynthesis.getVoices();
   var k;
+  if(state.voiceName){
+    for(k = 0; k < vs.length; k++) if(vs[k].name === state.voiceName){ voiceCache = vs[k]; return voiceCache; }
+  }
   for(k = 0; k < vs.length; k++) if(/en[-_]US/i.test(vs[k].lang) && /google|samantha|us english/i.test(vs[k].name)){ voiceCache = vs[k]; return voiceCache; }
   for(k = 0; k < vs.length; k++) if(/en[-_]US/i.test(vs[k].lang)){ voiceCache = vs[k]; return voiceCache; }
   for(k = 0; k < vs.length; k++) if(/^en/i.test(vs[k].lang)){ voiceCache = vs[k]; return voiceCache; }
   return null;
 }
 if(window.speechSynthesis){
-  speechSynthesis.onvoiceschanged = function(){ voiceCache = null; pickVoice(); };
+  speechSynthesis.onvoiceschanged = function(){ voiceCache = null; pickVoice(); fillVoices(); };
+}
+function fillVoices(){
+  var sel = $("voiceSel");
+  if(!window.speechSynthesis){ sel.innerHTML = '<option value="">Not available</option>'; return; }
+  var vs = speechSynthesis.getVoices().filter(function(v){ return /^en/i.test(v.lang); });
+  var html = '<option value="">Auto</option>';
+  for(var k = 0; k < vs.length; k++){
+    var nm = vs[k].name;
+    html += '<option value="' + nm.replace(/"/g, "&quot;") + '"' + (nm === state.voiceName ? " selected" : "") + '>' + nm + ' (' + vs[k].lang + ')</option>';
+  }
+  sel.innerHTML = html;
 }
 function speak(text, rate){
   return new Promise(function(resolve){
@@ -623,7 +646,6 @@ function startTimer(){
 function updateTimerBar(){
   var pct = Math.max(0, cardMs / (state.secs * 1000)) * 100;
   tfill.style.width = pct + "%";
-  timerEl.classList.toggle("low", pct < 30);
 }
 function pauseTimer(){ timerRunning = false; }
 function resumeTimer(){ timerRunning = true; }
@@ -668,34 +690,50 @@ function nextCard(){
 }
 function resolveSuccess(){
   if(!cardLive) return;
+  var g = jokeGen;
   cardLive = false;
   stopListen(); clearTimer();
   cleared++;
   updateHud();
   sfx.good();
   cardEl.className = "card good";
-  setTimeout(nextCard, 750);
+  setTimeout(function(){ if(g === jokeGen) nextCard(); }, 750);
 }
-function resolveFail(){
+function resolveFail(viaHelp){
   if(!cardLive) return;
+  var g = jokeGen;
   cardLive = false;
-  stopListen();
+  stopListen(); clearTimer();
   runFails++;
   state.miss[currentWord] = (state.miss[currentWord] || 0) + 1;
   runMissed[currentWord] = true;
   saveState();
-  sfx.bad();
-  cardEl.className = "card bad shake";
-  sayBanner.classList.add("on");
   var failedWord = currentWord;
-  speak(failedWord, 0.75).then(function(){
-    return speak(failedWord, 0.9);
-  }).then(function(){
+  sayBanner.classList.add("on");
+  var doneStep = function(){
+    if(g !== jokeGen) return;
     sayBanner.classList.remove("on");
     deck.push(failedWord);
-    cardEl.className = "card bad away";
-    setTimeout(nextCard, 420);
-  });
+    cardEl.className = viaHelp ? "card away" : "card bad away";
+    setTimeout(function(){ if(g === jokeGen) nextCard(); }, 420);
+  };
+  if(viaHelp){
+    cardEl.className = "card";
+    speak(failedWord, 0.8).then(function(){
+      return wait(1000);
+    }).then(doneStep);
+  } else {
+    sfx.bad();
+    cardEl.className = "card bad shake";
+    speak(failedWord, 0.75).then(function(){
+      return wait(1500);
+    }).then(function(){
+      if(g !== jokeGen) return;
+      return speak(failedWord, 0.9);
+    }).then(function(){
+      return wait(400);
+    }).then(doneStep);
+  }
 }
 var PRAISE3 = ["Perfect round, NAME! You are a superstar!", "Wow, NAME! Every single word on the first try!", "Incredible, NAME! Three stars!"];
 var PRAISE2 = ["You did it, NAME! Great job!", "Awesome work, NAME! You cleared every card!", "High five, NAME! Round complete!"];
@@ -942,7 +980,7 @@ function refreshLevelLabels(){
   $("swHeard").classList.toggle("onn", state.showHeard);
   chipLevel.textContent = "Lv " + state.level;
 }
-function openSettings(){ refreshLevelLabels(); overlay.classList.add("on"); if(cardLive){ pauseTimer(); stopListen(); } }
+function openSettings(){ refreshLevelLabels(); fillVoices(); overlay.classList.add("on"); if(cardLive){ pauseTimer(); stopListen(); } }
 function closeSettings(){
   overlay.classList.remove("on");
   saveState();
@@ -959,7 +997,33 @@ $("lvlMinus").onclick = function(){ state.level = Math.max(1, state.level - 1); 
 $("lvlPlus").onclick = function(){ state.level = Math.min(91, state.level + 1); refreshLevelLabels(); };
 $("swHeard").onclick = function(){ state.showHeard = !state.showHeard; refreshLevelLabels(); };
 $("nameVal").oninput = function(){ state.name = this.value; };
+$("voiceSel").onchange = function(){
+  state.voiceName = this.value;
+  voiceCache = null;
+  saveState();
+  var n = (state.name || "").trim() || "champ";
+  speak("Hi " + n + "! Let's play!", 0.95);
+};
 $("btnJokeAgain").onclick = function(){ ensureAudio(); if(lastJoke) tellJoke(lastJoke, false); };
+function quitToTitle(){
+  jokeGen++;
+  cardLive = false;
+  clearTimer(); stopListen();
+  if(window.speechSynthesis){ try{ speechSynthesis.cancel(); }catch(e){} }
+  sayBanner.classList.remove("on");
+  refreshLevelLabels();
+  showScreen(scrTitle);
+}
+$("homeGame").onclick = function(){
+  var wasLive = cardLive;
+  if(wasLive){ pauseTimer(); stopListen(); }
+  if(wasLive && !confirm("Leave this round? This round's progress will not be saved.")){
+    resumeTimer(); startListen();
+    return;
+  }
+  quitToTitle();
+};
+$("homeDone").onclick = quitToTitle;
 $("btnReset").onclick = function(){
   if(confirm("Reset progress to Level 1?")){
     state.level = 1; state.miss = {};
@@ -970,10 +1034,7 @@ $("btnReset").onclick = function(){
 /* ---------- Help ---------- */
 helpBtn.onclick = function(){
   if(!cardLive) return;
-  pauseTimer(); stopListen();
-  speak(currentWord, 0.75).then(function(){
-    if(cardLive){ resumeTimer(); startListen(); }
-  });
+  resolveFail(true);
 };
 
 /* ---------- Start ---------- */
