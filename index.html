@@ -125,6 +125,7 @@ body{
 @keyframes starpop{0%{transform:scale(.2);opacity:0;}60%{transform:scale(1.4);opacity:1;}100%{transform:scale(1);opacity:1;}}
 .txt{font-family:inherit;font-weight:700;font-size:17px;padding:10px 12px;border:2px solid #cdd7e4;border-radius:12px;width:150px;text-align:center;color:var(--ink);-webkit-user-select:text;user-select:text;}
 select.vsel{width:200px;text-align:left;background:#fff;}
+input.lvlnum{width:84px;padding:8px 6px;}
 
 /* Joke card */
 #scrDone{justify-content:flex-start;overflow-y:auto;padding-top:34px;padding-bottom:150px;}
@@ -270,7 +271,7 @@ select.vsel{width:200px;text-align:left;background:#fff;}
     <div class="row">
       <label>Level</label>
       <div class="step">
-        <button id="lvlMinus">&minus;</button><span id="lvlVal">Lv 1</span><button id="lvlPlus">+</button>
+        <button id="lvlMinus">&minus;</button><input type="number" class="txt lvlnum" id="lvlVal" min="1" max="91" inputmode="numeric"><button id="lvlPlus">+</button>
       </div>
     </div>
     <p class="note" id="lvlNote">Level 1 &bull; 10 words in play. Level changes apply to the next round.</p>
@@ -290,7 +291,7 @@ select.vsel{width:200px;text-align:left;background:#fff;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.10 (2026-08-02)";
+var APP_VERSION = "v1.11 (2026-08-02)";
 
 /* ---------- Data ---------- */
 var FRY = [
@@ -1004,7 +1005,7 @@ var overlay = $("overlay");
 function refreshLevelLabels(){
   var P = poolSize(state.level);
   $("titleLevel").innerHTML = "Level " + state.level + " &bull; " + P + " words";
-  $("lvlVal").textContent = "Lv " + state.level;
+  $("lvlVal").value = state.level;
   $("lvlNote").innerHTML = "Level " + state.level + " &bull; " + P + " words in play. Level changes apply to the next round.";
   $("secVal").textContent = state.secs + "s";
   $("nameVal").value = state.name;
@@ -1024,8 +1025,16 @@ $("btnCloseP").onclick = closeSettings;
 overlay.onclick = function(e){ if(e.target === overlay) closeSettings(); };
 $("secMinus").onclick = function(){ state.secs = Math.max(5, state.secs - 1); refreshLevelLabels(); };
 $("secPlus").onclick = function(){ state.secs = Math.min(15, state.secs + 1); refreshLevelLabels(); };
-$("lvlMinus").onclick = function(){ state.level = Math.max(1, state.level - 1); refreshLevelLabels(); };
-$("lvlPlus").onclick = function(){ state.level = Math.min(91, state.level + 1); refreshLevelLabels(); };
+function setLevel(n){
+  n = Math.round(Number(n));
+  if(!isFinite(n)) n = state.level;
+  state.level = Math.min(91, Math.max(1, n));
+  state.newWords = [];
+  refreshLevelLabels();
+}
+$("lvlMinus").onclick = function(){ setLevel(state.level - 1); };
+$("lvlPlus").onclick = function(){ setLevel(state.level + 1); };
+$("lvlVal").onchange = function(){ setLevel(this.value); };
 $("swHeard").onclick = function(){ state.showHeard = !state.showHeard; refreshLevelLabels(); };
 $("nameVal").oninput = function(){ state.name = this.value; };
 $("voiceSel").onchange = function(){
