@@ -225,7 +225,7 @@ select.vsel{width:200px;text-align:left;background:#fff;}
   <div class="stars" id="stars"></div>
   <div class="doneline" id="doneLine">You cleared all 20 cards!</div>
   <div class="donesub" id="doneSub"></div>
-  <div class="newcard" id="newCard" style="display:none"><small>NEW WORD</small><span id="newWord"></span></div>
+  <div class="newcard" id="newCard" style="display:none"><small id="newLabel">NEW WORD</small><span id="newWord"></span></div>
   <div class="jokecard" id="jokeCard" style="display:none">
     <small>&#129345; JOKE TIME</small>
     <div class="jsetup" id="jokeSetup"></div>
@@ -290,7 +290,7 @@ select.vsel{width:200px;text-align:left;background:#fff;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.8 (2026-08-02)";
+var APP_VERSION = "v1.10 (2026-08-02)";
 
 /* ---------- Data ---------- */
 var FRY = [
@@ -310,12 +310,13 @@ var EQUIV = {
   "the":["thee"],
   "of":["off","ov","uv"],
   "and":["an"],
-  "a":["ay","eh","uh","aye","ah","hey"],
+  "a":["ay","eh","uh","aye","ah","hey","hay"],
   "to":["two","too"],
-  "in":["inn"],
+  "in":["inn","n","en"],
+  "it":["eat"],
   "is":["iz"],
   "you":["u","yew","ewe"],
-  "he":["hee"],
+  "he":["hee","e"],
   "was":["wuz","woz"],
   "for":["four","fore"],
   "are":["r","ar","arr","our"],
@@ -380,6 +381,8 @@ if(state.showHeard === undefined) state.showHeard = true;
 if(state.name === undefined) state.name = "Henry";
 if(!state.jokeIds) state.jokeIds = [];
 if(state.voiceName === undefined) state.voiceName = "";
+if(!state.streak) state.streak = {};
+if(!state.newWords) state.newWords = [];
 
 function poolSize(lvl){ return Math.min(9 + lvl, 100); }
 function displayWord(w){ return w === "i" ? "I" : w; }
@@ -436,17 +439,33 @@ function weightedSampleDistinct(arr, n){
 function buildDeck(){
   var P = poolSize(state.level);
   var pool = FRY.slice(0, P);
-  var newest = FRY[P - 1];
-  var deckArr = [], k, c;
-  if(P <= 20){
-    var base = Math.floor(20 / P);
-    for(k = 0; k < P; k++) for(c = 0; c < base; c++) deckArr.push(pool[k]);
-    deckArr = deckArr.concat(weightedSampleDistinct(pool, 20 - base * P));
-  } else {
-    var rest = [];
-    for(k = 0; k < P; k++) if(pool[k] !== newest) rest.push(pool[k]);
-    deckArr = [newest].concat(weightedSampleDistinct(rest, 19));
+  var streak = state.streak || {};
+  var newW = [];
+  var nwSrc = state.newWords || [];
+  for(var k = 0; k < nwSrc.length; k++) if(pool.indexOf(nwSrc[k]) > -1 && newW.indexOf(nwSrc[k]) < 0) newW.push(nwSrc[k]);
+  var mastered = [], frontier = [];
+  for(k = 0; k < P; k++){
+    var w = pool[k];
+    if(newW.indexOf(w) > -1) continue;
+    if((streak[w] || 0) >= 2) mastered.push(w); else frontier.push(w);
   }
+  var deckArr = [], c;
+  for(k = 0; k < newW.length; k++){ deckArr.push(newW[k]); deckArr.push(newW[k]); }
+  var slotsLeft = 20 - deckArr.length;
+  var reviewCount = mastered.length ? Math.min(4, mastered.length, Math.max(1, slotsLeft - frontier.length), slotsLeft) : 0;
+  var frontierSlots = slotsLeft - reviewCount;
+  if(frontier.length === 0){
+    deckArr = deckArr.concat(weightedSampleDistinct(mastered, Math.min(frontierSlots, mastered.length)));
+  } else if(frontier.length >= frontierSlots){
+    deckArr = deckArr.concat(weightedSampleDistinct(frontier, frontierSlots));
+  } else {
+    var base = Math.floor(frontierSlots / frontier.length);
+    for(k = 0; k < frontier.length; k++) for(c = 0; c < base; c++) deckArr.push(frontier[k]);
+    deckArr = deckArr.concat(weightedSampleDistinct(frontier, frontierSlots - base * frontier.length));
+  }
+  deckArr = deckArr.concat(weightedSampleDistinct(mastered, reviewCount));
+  while(deckArr.length < 20) deckArr.push(pool[Math.floor(Math.random() * P)]);
+  deckArr = deckArr.slice(0, 20);
   var tries = 0;
   do { shuffle(deckArr); tries++; } while (hasAdjacentDupe(deckArr) && tries < 40);
   for(k = 1; k < deckArr.length; k++){
@@ -653,7 +672,7 @@ function clearTimer(){ clearInterval(timerInt); }
 
 /* ---------- Game flow ---------- */
 var deck = [], currentWord = "", cardLive = false;
-var cleared = 0, runFails = 0, runMissed = {};
+var cleared = 0, runFails = 0, runMissed = {}, runSeen = {};
 
 function updateHud(){
   chipLevel.textContent = "Lv " + state.level;
@@ -670,7 +689,7 @@ function startGame(){
   $("btnAgain").classList.remove("pulse");
   primeJoke();
   deck = buildDeck();
-  cleared = 0; runFails = 0; runMissed = {};
+  cleared = 0; runFails = 0; runMissed = {}; runSeen = {};
   asrNetFails = 0;
   showScreen(scrGame);
   nextCard();
@@ -681,6 +700,7 @@ function nextCard(){
   currentWord = deck.shift();
   cardLive = true;
   restartsThisCard = 0;
+  runSeen[currentWord] = true;
   cardEl.className = "card enter";
   wordEl.textContent = displayWord(currentWord);
   heardEl.textContent = "";
@@ -789,18 +809,29 @@ function finishRun(){
   for(var m2 in runMissed) halved[m2] = (halved[m2] || 0) + 1;
   state.miss = halved;
 
-  var newWord = null;
-  if(poolSize(state.level) < 100){
-    state.level++;
-    newWord = FRY[poolSize(state.level) - 1];
+  for(var sw in runSeen){
+    if(runMissed[sw]) state.streak[sw] = 0;
+    else state.streak[sw] = (state.streak[sw] || 0) + 1;
   }
+
+  var before = poolSize(state.level);
+  var add = Math.min(starCount, 100 - before);
+  var newWordsArr = [];
+  if(add > 0){
+    state.level += add;
+    for(var nk = before; nk < before + add; nk++) newWordsArr.push(FRY[nk]);
+  }
+  state.newWords = newWordsArr;
   saveState();
   refreshLevelLabels();
 
   var nc = $("newCard");
-  if(newWord){
+  if(newWordsArr.length){
     nc.style.display = "";
-    $("newWord").textContent = displayWord(newWord);
+    $("newLabel").textContent = newWordsArr.length > 1 ? "NEW WORDS" : "NEW WORD";
+    var nwEl = $("newWord");
+    nwEl.textContent = newWordsArr.map(displayWord).join("   ");
+    nwEl.style.fontSize = newWordsArr.length > 1 ? "34px" : "56px";
   } else {
     nc.style.display = "none";
     $("doneSub").textContent += " All 100 words are in play!";
@@ -820,7 +851,7 @@ function finishRun(){
   setTimeout(function(){
     speak(pickPraise(starCount, kidName), 0.95).then(function(){
       if(gen !== jokeGen) return;
-      if(newWord) return speak("New word: " + displayWord(newWord), 0.85);
+      if(newWordsArr.length) return speak((newWordsArr.length > 1 ? "New words: " : "New word: ") + newWordsArr.map(displayWord).join(", "), 0.85);
     }).then(function(){
       if(gen !== jokeGen) return;
       return wait(500);
@@ -1026,7 +1057,7 @@ $("homeGame").onclick = function(){
 $("homeDone").onclick = quitToTitle;
 $("btnReset").onclick = function(){
   if(confirm("Reset progress to Level 1?")){
-    state.level = 1; state.miss = {};
+    state.level = 1; state.miss = {}; state.streak = {}; state.newWords = [];
     saveState(); refreshLevelLabels();
   }
 };
