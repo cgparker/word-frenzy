@@ -291,7 +291,9 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.12 (2026-08-02)";
+var APP_VERSION = "v1.15 (2026-08-02)";
+
+var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6;
 
 /* ---------- Data ---------- */
 var FRY = [
@@ -325,7 +327,7 @@ var EQUIV = {
   "i":["eye","aye"],
   "be":["bee","b"],
   "have":["hav"],
-  "or":["oar","ore"],
+  "or":["oar","ore","are","our","o","oh","ar","arr","r"],
   "one":["won"],
   "by":["buy","bye","bi"],
   "but":["butt"],
@@ -440,32 +442,44 @@ function weightedSampleDistinct(arr, n){
 function buildDeck(){
   var P = poolSize(state.level);
   var pool = FRY.slice(0, P);
-  var streak = state.streak || {};
+  var streak = state.streak || {}, miss = state.miss || {};
   var newW = [];
   var nwSrc = state.newWords || [];
-  for(var k = 0; k < nwSrc.length; k++) if(pool.indexOf(nwSrc[k]) > -1 && newW.indexOf(nwSrc[k]) < 0) newW.push(nwSrc[k]);
-  var mastered = [], frontier = [];
+  var k, c, w;
+  for(k = 0; k < nwSrc.length; k++) if(pool.indexOf(nwSrc[k]) > -1 && newW.indexOf(nwSrc[k]) < 0) newW.push(nwSrc[k]);
+  var struggle = [], confident = [], rest = [];
   for(k = 0; k < P; k++){
-    var w = pool[k];
+    w = pool[k];
     if(newW.indexOf(w) > -1) continue;
-    if((streak[w] || 0) >= 2) mastered.push(w); else frontier.push(w);
+    if((miss[w] || 0) > 0) struggle.push(w);
+    else if((streak[w] || 0) >= 2) confident.push(w);
+    else rest.push(w);
   }
-  var deckArr = [], c;
+  var deckArr = [];
   for(k = 0; k < newW.length; k++){ deckArr.push(newW[k]); deckArr.push(newW[k]); }
   var slotsLeft = 20 - deckArr.length;
-  var reviewCount = mastered.length ? Math.min(4, mastered.length, Math.max(1, slotsLeft - frontier.length), slotsLeft) : 0;
-  var frontierSlots = slotsLeft - reviewCount;
-  if(frontier.length === 0){
-    deckArr = deckArr.concat(weightedSampleDistinct(mastered, Math.min(frontierSlots, mastered.length)));
-  } else if(frontier.length >= frontierSlots){
-    deckArr = deckArr.concat(weightedSampleDistinct(frontier, frontierSlots));
+  var sCount = Math.min(STRUGGLE_DECK_MAX, struggle.length, slotsLeft);
+  deckArr = deckArr.concat(weightedSampleDistinct(struggle, sCount));
+  slotsLeft = 20 - deckArr.length;
+  var confCount = Math.min(CONF_MIN, confident.length, slotsLeft);
+  deckArr = deckArr.concat(weightedSampleDistinct(confident, confCount));
+  slotsLeft = 20 - deckArr.length;
+  if(rest.length >= slotsLeft){
+    deckArr = deckArr.concat(weightedSampleDistinct(rest, slotsLeft));
   } else {
-    var base = Math.floor(frontierSlots / frontier.length);
-    for(k = 0; k < frontier.length; k++) for(c = 0; c < base; c++) deckArr.push(frontier[k]);
-    deckArr = deckArr.concat(weightedSampleDistinct(frontier, frontierSlots - base * frontier.length));
+    deckArr = deckArr.concat(rest);
+    slotsLeft -= rest.length;
+    var extraConf = [];
+    for(k = 0; k < confident.length; k++) if(deckArr.indexOf(confident[k]) < 0) extraConf.push(confident[k]);
+    var take = Math.min(extraConf.length, slotsLeft);
+    deckArr = deckArr.concat(weightedSampleDistinct(extraConf, take));
+    slotsLeft -= take;
+    var repeatPool = rest.length ? rest : (struggle.length ? struggle : pool);
+    var rp = repeatPool.slice();
+    shuffle(rp);
+    var ri = 0;
+    while(slotsLeft-- > 0){ deckArr.push(rp[ri % rp.length]); ri++; }
   }
-  deckArr = deckArr.concat(weightedSampleDistinct(mastered, reviewCount));
-  while(deckArr.length < 20) deckArr.push(pool[Math.floor(Math.random() * P)]);
   deckArr = deckArr.slice(0, 20);
   var tries = 0;
   do { shuffle(deckArr); tries++; } while (hasAdjacentDupe(deckArr) && tries < 40);
@@ -816,7 +830,10 @@ function finishRun(){
   }
 
   var before = poolSize(state.level);
-  var add = Math.min(starCount, 100 - before);
+  var struggling = 0;
+  for(var sk = 0; sk < before; sk++) if((state.miss[FRY[sk]] || 0) > 0) struggling++;
+  var allow = struggling >= STRUGGLE_HARD ? 0 : (struggling >= STRUGGLE_SOFT ? 1 : starCount);
+  var add = Math.min(allow, 100 - before);
   var newWordsArr = [];
   if(add > 0){
     state.level += add;
@@ -835,7 +852,9 @@ function finishRun(){
     nwEl.style.fontSize = newWordsArr.length > 1 ? "34px" : "56px";
   } else {
     nc.style.display = "none";
-    $("doneSub").textContent += " All 100 words are in play!";
+    var ds = $("doneSub");
+    var extra = before >= 100 ? "All 100 words are in play!" : "Practice round next: time to master the tricky ones!";
+    ds.textContent = (ds.textContent ? ds.textContent + " " : "") + extra;
   }
   $("nextLevel").textContent = "Level " + state.level + " is ready";
 
