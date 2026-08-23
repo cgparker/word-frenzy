@@ -291,9 +291,10 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.15 (2026-08-02)";
+var APP_VERSION = "v1.16 (2026-08-23)";
 
-var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6;
+var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 3;
+function isStuck(w){ return (state.stuck ? (state.stuck[w] || 0) : 0) >= STUCK_ROUNDS; }
 
 /* ---------- Data ---------- */
 var FRY = [
@@ -386,6 +387,7 @@ if(!state.jokeIds) state.jokeIds = [];
 if(state.voiceName === undefined) state.voiceName = "";
 if(!state.streak) state.streak = {};
 if(!state.newWords) state.newWords = [];
+if(!state.stuck) state.stuck = {};
 
 function poolSize(lvl){ return Math.min(9 + lvl, 100); }
 function displayWord(w){ return w === "i" ? "I" : w; }
@@ -458,8 +460,16 @@ function buildDeck(){
   var deckArr = [];
   for(k = 0; k < newW.length; k++){ deckArr.push(newW[k]); deckArr.push(newW[k]); }
   var slotsLeft = 20 - deckArr.length;
-  var sCount = Math.min(STRUGGLE_DECK_MAX, struggle.length, slotsLeft);
-  deckArr = deckArr.concat(weightedSampleDistinct(struggle, sCount));
+  var sBudget = Math.min(STRUGGLE_DECK_MAX, slotsLeft);
+  var sPool = struggle.slice();
+  while(sBudget > 0 && sPool.length){
+    var pw = weightedSampleDistinct(sPool, 1)[0];
+    sPool.splice(sPool.indexOf(pw), 1);
+    if(isStuck(pw)){
+      if(sBudget >= 2){ deckArr.push(pw); deckArr.push(pw); sBudget -= 2; }
+    }
+    else { deckArr.push(pw); sBudget -= 1; }
+  }
   slotsLeft = 20 - deckArr.length;
   var confCount = Math.min(CONF_MIN, confident.length, slotsLeft);
   deckArr = deckArr.concat(weightedSampleDistinct(confident, confCount));
@@ -687,7 +697,7 @@ function clearTimer(){ clearInterval(timerInt); }
 
 /* ---------- Game flow ---------- */
 var deck = [], currentWord = "", cardLive = false;
-var cleared = 0, runFails = 0, runMissed = {}, runSeen = {};
+var cleared = 0, runFails = 0, runMissed = {}, runSeen = {}, echoDone = {};
 
 function updateHud(){
   chipLevel.textContent = "Lv " + state.level;
@@ -704,7 +714,7 @@ function startGame(){
   $("btnAgain").classList.remove("pulse");
   primeJoke();
   deck = buildDeck();
-  cleared = 0; runFails = 0; runMissed = {}; runSeen = {};
+  cleared = 0; runFails = 0; runMissed = {}; runSeen = {}; echoDone = {};
   asrNetFails = 0;
   showScreen(scrGame);
   nextCard();
@@ -720,8 +730,21 @@ function nextCard(){
   wordEl.textContent = displayWord(currentWord);
   heardEl.textContent = "";
   updateHud();
-  startTimer();
-  startListen();
+  if(isStuck(currentWord) && !echoDone[currentWord]){
+    echoDone[currentWord] = true;
+    var g = jokeGen, ew = currentWord;
+    sayBanner.textContent = "Say it with me!";
+    sayBanner.classList.add("on");
+    speak(ew, 0.75).then(function(){ return wait(250); }).then(function(){
+      if(g !== jokeGen || !cardLive || currentWord !== ew) return;
+      sayBanner.classList.remove("on");
+      startTimer();
+      startListen();
+    });
+  } else {
+    startTimer();
+    startListen();
+  }
 }
 function resolveSuccess(){
   if(!cardLive) return;
@@ -744,6 +767,7 @@ function resolveFail(viaHelp){
   runMissed[currentWord] = true;
   saveState();
   var failedWord = currentWord;
+  sayBanner.textContent = "Listen...";
   sayBanner.classList.add("on");
   var doneStep = function(){
     if(g !== jokeGen) return;
@@ -756,6 +780,18 @@ function resolveFail(viaHelp){
     cardEl.className = "card";
     speak(failedWord, 0.8).then(function(){
       return wait(1000);
+    }).then(doneStep);
+  } else if(isStuck(failedWord)){
+    sfx.bad();
+    cardEl.className = "card bad shake";
+    var spellOut = failedWord.toUpperCase().split("").join(", ");
+    speak(failedWord, 0.75).then(function(){
+      return wait(1200);
+    }).then(function(){
+      if(g !== jokeGen) return;
+      return speak(spellOut + ", spells, " + failedWord, 0.85);
+    }).then(function(){
+      return wait(500);
     }).then(doneStep);
   } else {
     sfx.bad();
@@ -825,8 +861,23 @@ function finishRun(){
   state.miss = halved;
 
   for(var sw in runSeen){
-    if(runMissed[sw]) state.streak[sw] = 0;
-    else state.streak[sw] = (state.streak[sw] || 0) + 1;
+    if(runMissed[sw]){
+      state.streak[sw] = 0;
+      state.stuck[sw] = (state.stuck[sw] || 0) + 1;
+    } else {
+      state.streak[sw] = (state.streak[sw] || 0) + 1;
+    }
+  }
+  var conquered = [];
+  for(var cw in runSeen){
+    if(!runMissed[cw] && (state.streak[cw] || 0) >= 2){
+      if((state.stuck[cw] || 0) >= STUCK_ROUNDS) conquered.push(cw);
+      state.stuck[cw] = 0;
+    }
+  }
+  if(conquered.length){
+    var ds0 = $("doneSub");
+    ds0.textContent = (ds0.textContent ? ds0.textContent + " " : "") + "Conquered: " + conquered.map(displayWord).join(", ") + "!";
   }
 
   var before = poolSize(state.level);
@@ -870,6 +921,9 @@ function finishRun(){
   var gen = jokeGen;
   setTimeout(function(){
     speak(pickPraise(starCount, kidName), 0.95).then(function(){
+      if(gen !== jokeGen) return;
+      if(conquered.length) return speak("You beat the word " + displayWord(conquered[0]) + "!", 0.95);
+    }).then(function(){
       if(gen !== jokeGen) return;
       if(newWordsArr.length) return speak((newWordsArr.length > 1 ? "New words: " : "New word: ") + newWordsArr.map(displayWord).join(", "), 0.85);
     }).then(function(){
@@ -1085,7 +1139,7 @@ $("homeGame").onclick = function(){
 $("homeDone").onclick = quitToTitle;
 $("btnReset").onclick = function(){
   if(confirm("Reset progress to Level 1?")){
-    state.level = 1; state.miss = {}; state.streak = {}; state.newWords = [];
+    state.level = 1; state.miss = {}; state.streak = {}; state.newWords = []; state.stuck = {};
     saveState(); refreshLevelLabels();
   }
 };
