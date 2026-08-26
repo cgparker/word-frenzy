@@ -291,7 +291,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.16 (2026-08-23)";
+var APP_VERSION = "v1.17 (2026-08-23)";
 
 var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 3;
 function isStuck(w){ return (state.stuck ? (state.stuck[w] || 0) : 0) >= STUCK_ROUNDS; }
@@ -322,7 +322,7 @@ var EQUIV = {
   "you":["u","yew","ewe"],
   "he":["hee","e"],
   "was":["wuz","woz"],
-  "for":["four","fore"],
+  "for":["four","fore","follow"],
   "are":["r","ar","arr","our","or","o","oh"],
   "as":["az"],
   "i":["eye","aye"],
@@ -596,6 +596,7 @@ function speak(text, rate){
           var v = pickVoice(); if(v) u.voice = v;
           u.onend = finish; u.onerror = finish;
           setTimeout(finish, 1800 + text.length * 120);
+          try{ speechSynthesis.resume(); }catch(re){}
           speechSynthesis.speak(u);
         }catch(e){ finish(); }
       }, delay);
@@ -606,7 +607,7 @@ function ttsUnlock(){
   if(!window.speechSynthesis) return;
   try{
     speechSynthesis.getVoices();
-    var u = new SpeechSynthesisUtterance("");
+    var u = new SpeechSynthesisUtterance(" ");
     speechSynthesis.speak(u);
   }catch(e){}
 }
@@ -778,14 +779,20 @@ function resolveFail(viaHelp){
   };
   if(viaHelp){
     cardEl.className = "card";
-    speak(failedWord, 0.8).then(function(){
+    wait(300).then(function(){
+      if(g !== jokeGen) return;
+      return speak(failedWord, 0.8);
+    }).then(function(){
       return wait(1000);
     }).then(doneStep);
   } else if(isStuck(failedWord)){
     sfx.bad();
     cardEl.className = "card bad shake";
     var spellOut = failedWord.toUpperCase().split("").join(", ");
-    speak(failedWord, 0.75).then(function(){
+    wait(300).then(function(){
+      if(g !== jokeGen) return;
+      return speak(failedWord, 0.75);
+    }).then(function(){
       return wait(1200);
     }).then(function(){
       if(g !== jokeGen) return;
@@ -796,7 +803,10 @@ function resolveFail(viaHelp){
   } else {
     sfx.bad();
     cardEl.className = "card bad shake";
-    speak(failedWord, 0.75).then(function(){
+    wait(300).then(function(){
+      if(g !== jokeGen) return;
+      return speak(failedWord, 0.75);
+    }).then(function(){
       return wait(1500);
     }).then(function(){
       if(g !== jokeGen) return;
@@ -1147,6 +1157,7 @@ $("btnReset").onclick = function(){
 /* ---------- Help ---------- */
 helpBtn.onclick = function(){
   if(!cardLive) return;
+  ensureAudio();
   resolveFail(true);
 };
 
