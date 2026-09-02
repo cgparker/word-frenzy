@@ -291,9 +291,9 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.17 (2026-08-23)";
+var APP_VERSION = "v1.20 (2026-08-23)";
 
-var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 3;
+var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 2;
 function isStuck(w){ return (state.stuck ? (state.stuck[w] || 0) : 0) >= STUCK_ROUNDS; }
 
 /* ---------- Data ---------- */
@@ -331,6 +331,7 @@ var EQUIV = {
   "or":["oar","ore","are","our","o","oh","ar","arr","r"],
   "one":["won"],
   "by":["buy","bye","bi"],
+  "word":["ward","world"],
   "but":["butt"],
   "not":["knot","naught"],
   "what":["watt","wot"],
@@ -611,6 +612,9 @@ function ttsUnlock(){
     speechSynthesis.speak(u);
   }catch(e){}
 }
+var TTS_SAY = { "have": "hav" };
+function sayForm(w){ return TTS_SAY[w] || w; }
+function speakWord(w, rate){ return speak(sayForm(w) + ",", rate); }
 
 /* ---------- Recognition ---------- */
 var SRCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -736,7 +740,7 @@ function nextCard(){
     var g = jokeGen, ew = currentWord;
     sayBanner.textContent = "Say it with me!";
     sayBanner.classList.add("on");
-    speak(ew, 0.75).then(function(){ return wait(250); }).then(function(){
+    speakWord(ew, 0.75).then(function(){ return wait(250); }).then(function(){
       if(g !== jokeGen || !cardLive || currentWord !== ew) return;
       sayBanner.classList.remove("on");
       startTimer();
@@ -781,7 +785,7 @@ function resolveFail(viaHelp){
     cardEl.className = "card";
     wait(300).then(function(){
       if(g !== jokeGen) return;
-      return speak(failedWord, 0.8);
+      return speakWord(failedWord, 0.8);
     }).then(function(){
       return wait(1000);
     }).then(doneStep);
@@ -791,12 +795,12 @@ function resolveFail(viaHelp){
     var spellOut = failedWord.toUpperCase().split("").join(", ");
     wait(300).then(function(){
       if(g !== jokeGen) return;
-      return speak(failedWord, 0.75);
+      return speakWord(failedWord, 0.75);
     }).then(function(){
       return wait(1200);
     }).then(function(){
       if(g !== jokeGen) return;
-      return speak(spellOut + ", spells, " + failedWord, 0.85);
+      return speak(spellOut + ", spells, " + sayForm(failedWord) + ",", 0.85);
     }).then(function(){
       return wait(500);
     }).then(doneStep);
@@ -805,12 +809,12 @@ function resolveFail(viaHelp){
     cardEl.className = "card bad shake";
     wait(300).then(function(){
       if(g !== jokeGen) return;
-      return speak(failedWord, 0.75);
+      return speakWord(failedWord, 0.75);
     }).then(function(){
       return wait(1500);
     }).then(function(){
       if(g !== jokeGen) return;
-      return speak(failedWord, 0.9);
+      return speakWord(failedWord, 0.9);
     }).then(function(){
       return wait(400);
     }).then(doneStep);
@@ -935,7 +939,7 @@ function finishRun(){
       if(conquered.length) return speak("You beat the word " + displayWord(conquered[0]) + "!", 0.95);
     }).then(function(){
       if(gen !== jokeGen) return;
-      if(newWordsArr.length) return speak((newWordsArr.length > 1 ? "New words: " : "New word: ") + newWordsArr.map(displayWord).join(", "), 0.85);
+      if(newWordsArr.length) return speak((newWordsArr.length > 1 ? "New words: " : "New word: ") + newWordsArr.map(displayWord).join(", ") + ",", 0.85);
     }).then(function(){
       if(gen !== jokeGen) return;
       return wait(500);
