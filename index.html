@@ -72,6 +72,8 @@ body{
   font-size:clamp(64px,19vw,180px);line-height:1;letter-spacing:.01em;
 }
 .card.enter{animation:enter .35s ease-out;}
+.card.warm{background:#f2ecff;}
+.card.warm .word{color:#6b46c1;}
 .card.good{background:#eaffe9;}
 .card.good .word{color:var(--palm);}
 .card.good{animation:pop .45s ease-out;}
@@ -291,10 +293,11 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.20 (2026-08-23)";
+var APP_VERSION = "v1.21 (2026-08-23)";
 
 var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 2;
 function isStuck(w){ return (state.stuck ? (state.stuck[w] || 0) : 0) >= STUCK_ROUNDS; }
+var roundStuck = [];
 
 /* ---------- Data ---------- */
 var FRY = [
@@ -461,15 +464,14 @@ function buildDeck(){
   var deckArr = [];
   for(k = 0; k < newW.length; k++){ deckArr.push(newW[k]); deckArr.push(newW[k]); }
   var slotsLeft = 20 - deckArr.length;
+  roundStuck = [];
   var sBudget = Math.min(STRUGGLE_DECK_MAX, slotsLeft);
   var sPool = struggle.slice();
   while(sBudget > 0 && sPool.length){
     var pw = weightedSampleDistinct(sPool, 1)[0];
     sPool.splice(sPool.indexOf(pw), 1);
-    if(isStuck(pw)){
-      if(sBudget >= 2){ deckArr.push(pw); deckArr.push(pw); sBudget -= 2; }
-    }
-    else { deckArr.push(pw); sBudget -= 1; }
+    deckArr.push(pw); sBudget -= 1;
+    if(isStuck(pw) && roundStuck.length < 2) roundStuck.push(pw);
   }
   slotsLeft = 20 - deckArr.length;
   var confCount = Math.min(CONF_MIN, confident.length, slotsLeft);
@@ -640,7 +642,7 @@ function initRec(){
       for(var j = 0; j < res.length; j++){
         var txt = res[j].transcript || "";
         if(j === 0) latest = txt;
-        if(matches(currentWord, txt)){ showHeard(txt); resolveSuccess(); return; }
+        if(matches(currentWord, txt)){ showHeard(txt); if(warmMode) warmSuccess(); else resolveSuccess(); return; }
       }
     }
     if(latest) showHeard(latest);
@@ -702,7 +704,7 @@ function clearTimer(){ clearInterval(timerInt); }
 
 /* ---------- Game flow ---------- */
 var deck = [], currentWord = "", cardLive = false;
-var cleared = 0, runFails = 0, runMissed = {}, runSeen = {}, echoDone = {};
+var cleared = 0, runFails = 0, runMissed = {}, runSeen = {};
 
 function updateHud(){
   chipLevel.textContent = "Lv " + state.level;
@@ -719,10 +721,10 @@ function startGame(){
   $("btnAgain").classList.remove("pulse");
   primeJoke();
   deck = buildDeck();
-  cleared = 0; runFails = 0; runMissed = {}; runSeen = {}; echoDone = {};
+  cleared = 0; runFails = 0; runMissed = {}; runSeen = {};
   asrNetFails = 0;
   showScreen(scrGame);
-  nextCard();
+  if(roundStuck.length) startWarmup(); else nextCard();
 }
 function nextCard(){
   sayBanner.classList.remove("on");
@@ -735,21 +737,57 @@ function nextCard(){
   wordEl.textContent = displayWord(currentWord);
   heardEl.textContent = "";
   updateHud();
-  if(isStuck(currentWord) && !echoDone[currentWord]){
-    echoDone[currentWord] = true;
-    var g = jokeGen, ew = currentWord;
-    sayBanner.textContent = "Say it with me!";
-    sayBanner.classList.add("on");
-    speakWord(ew, 0.75).then(function(){ return wait(250); }).then(function(){
-      if(g !== jokeGen || !cardLive || currentWord !== ew) return;
-      sayBanner.classList.remove("on");
-      startTimer();
-      startListen();
-    });
-  } else {
-    startTimer();
-    startListen();
+  startTimer();
+  startListen();
+}
+var warmTO = null, warmQueue = [], warmMode = false;
+function startWarmup(){
+  warmQueue = roundStuck.slice();
+  warmMode = true;
+  chipLeft.textContent = "Warm-up";
+  nextWarmCard();
+}
+function nextWarmCard(){
+  sayBanner.classList.remove("on");
+  clearTimeout(warmTO);
+  if(!warmQueue.length){
+    warmMode = false;
+    cardLive = false;
+    var g0 = jokeGen;
+    speak("Ready? Go!", 1).then(function(){ if(g0 === jokeGen) nextCard(); });
+    return;
   }
+  currentWord = warmQueue.shift();
+  cardLive = true;
+  restartsThisCard = 0;
+  cardEl.className = "card warm enter";
+  wordEl.textContent = displayWord(currentWord);
+  heardEl.textContent = "";
+  var g = jokeGen, ww = currentWord;
+  sayBanner.textContent = "Warm-up! Say it with me!";
+  sayBanner.classList.add("on");
+  speakWord(ww, 0.75).then(function(){ return wait(250); }).then(function(){
+    if(g !== jokeGen || currentWord !== ww || !warmMode) return;
+    startListen();
+    warmTO = setTimeout(function(){ warmMiss(g); }, 6000);
+  });
+}
+function warmSuccess(){
+  if(!warmMode || !cardLive) return;
+  cardLive = false;
+  clearTimeout(warmTO);
+  stopListen();
+  sfx.good();
+  cardEl.className = "card good";
+  setTimeout(nextWarmCard, 650);
+}
+function warmMiss(g){
+  if(g !== jokeGen || !warmMode || !cardLive) return;
+  cardLive = false;
+  stopListen();
+  speakWord(currentWord, 0.8).then(function(){ return wait(400); }).then(function(){
+    if(g === jokeGen && warmMode) nextWarmCard();
+  });
 }
 function resolveSuccess(){
   if(!cardLive) return;
@@ -1135,6 +1173,8 @@ $("btnJokeAgain").onclick = function(){ ensureAudio(); if(lastJoke) tellJoke(las
 function quitToTitle(){
   jokeGen++;
   cardLive = false;
+  warmMode = false;
+  clearTimeout(warmTO);
   clearTimer(); stopListen();
   if(window.speechSynthesis){ try{ speechSynthesis.cancel(); }catch(e){} }
   sayBanner.classList.remove("on");
