@@ -293,7 +293,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.22 (2026-08-23)";
+var APP_VERSION = "v1.23 (2026-08-23)";
 
 var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 2;
 function isStuck(w){ return (state.stuck ? (state.stuck[w] || 0) : 0) >= STUCK_ROUNDS; }
@@ -339,7 +339,7 @@ var EQUIV = {
   "not":["knot","naught"],
   "what":["watt","wot"],
   "all":["awl"],
-  "were":["where","wear","ware","wall"],
+  "were":["where","wear","ware","wall","war"],
   "we":["wee","whee"],
   "when":["wen"],
   "your":["youre","yore"],
@@ -410,7 +410,9 @@ function matches(target, transcript){
   var toks = clean.split(/\s+/);
   var joined = "";
   for(var k = 0; k < toks.length; k++){
-    var t = DIGITS[toks[k]] || toks[k];
+    var t = toks[k];
+    if(/^([a-z0-9])\1+$/.test(t)) t = t.charAt(0);
+    t = DIGITS[t] || t;
     if(acc[t]) return true;
     joined += t;
   }
