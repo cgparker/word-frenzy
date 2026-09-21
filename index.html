@@ -293,7 +293,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.25 (2026-09-20)";
+var APP_VERSION = "v1.26 (2026-09-20)";
 
 var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 2;
 function isStuck(w){ return (state.stuck ? (state.stuck[w] || 0) : 0) >= STUCK_ROUNDS; }
@@ -321,6 +321,7 @@ var EQUIV = {
   "to":["two","too"],
   "in":["inn","n","en"],
   "it":["eat"],
+  "each":["eat"],
   "is":["iz"],
   "you":["u","yew","ewe"],
   "he":["hee","e"],
