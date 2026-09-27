@@ -308,7 +308,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.27 (2026-09-27)";
+var APP_VERSION = "v1.28 (2026-09-27)";
 
 var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 2;
 function isStuck(w){ return (state.stuck ? (state.stuck[w] || 0) : 0) >= STUCK_ROUNDS; }
@@ -1387,7 +1387,7 @@ $("gearDone").onclick = openSettings;
 $("btnCloseP").onclick = closeSettings;
 overlay.onclick = function(e){ if(e.target === overlay) closeSettings(); };
 $("secMinus").onclick = function(){ state.secs = Math.max(5, state.secs - 1); refreshLevelLabels(); };
-$("secPlus").onclick = function(){ state.secs = Math.min(15, state.secs + 1); refreshLevelLabels(); };
+$("secPlus").onclick = function(){ state.secs = Math.min(20, state.secs + 1); refreshLevelLabels(); };
 function setLevel(n){
   n = Math.round(Number(n));
   if(!isFinite(n)) n = state.level;
