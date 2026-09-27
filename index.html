@@ -73,6 +73,21 @@ body{
 }
 .card.enter{animation:enter .35s ease-out;}
 .card.warm{background:#f2ecff;}
+.word .ch{display:inline-block;margin:0 .03em;border-radius:12px;padding:0 .03em;transition:background .15s,color .15s;}
+.word.map .ch{border-bottom:.07em solid rgba(23,50,77,.22);color:var(--ink);}
+.word .ch.q{opacity:.38;}
+.word .ch.h{color:#d6336c;position:relative;}
+.word .ch.h::after{content:"\2665";position:absolute;left:50%;top:-.38em;transform:translateX(-50%);font-size:.3em;color:#ff5d73;}
+.word .ch.lit{background:#ffe066;}
+.word .ch.h.lit{background:#ffd6e2;}
+.word .ch.pulse{animation:pop .5s ease-out 2;}
+.tapmode .microw,.tapmode .heard{visibility:hidden;}
+.choices{display:none;gap:5vw;justify-content:center;align-items:center;}
+.card.choose .word{display:none;}
+.card.choose .choices{display:flex;}
+.choice{font-family:'Andika','Fredoka',sans-serif;font-weight:700;font-size:clamp(46px,12vw,120px);line-height:1.1;background:#fff;border:4px solid #e3d9bd;border-radius:24px;padding:.08em .4em .14em;color:var(--ink);cursor:pointer;box-shadow:0 6px 0 #e3d9bd;}
+.choice.right{background:#eaffe9;border-color:var(--palm);color:var(--palm);box-shadow:0 6px 0 var(--palm-dk);}
+.choice.wrong{animation:shake .45s;opacity:.55;}
 .card.warm .word{color:#6b46c1;}
 .card.good{background:#eaffe9;}
 .card.good .word{color:var(--palm);}
@@ -215,7 +230,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <div class="screen" id="scrGame">
   <div class="stage">
     <div class="stack"><b></b><b></b></div>
-    <div class="card" id="card"><div class="word" id="word">the</div></div>
+    <div class="card" id="card"><div class="word" id="word">the</div><div class="choices" id="choices"></div></div>
   </div>
   <div class="microw"><div class="ring" id="ring">&#127908;</div><span id="micLabel">Listening...</span></div>
   <div class="heard" id="heard"></div>
@@ -293,7 +308,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.26 (2026-09-20)";
+var APP_VERSION = "v1.27 (2026-09-27)";
 
 var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 2;
 function isStuck(w){ return (state.stuck ? (state.stuck[w] || 0) : 0) >= STUCK_ROUNDS; }
@@ -587,7 +602,7 @@ function fillVoices(){
   }
   sel.innerHTML = html;
 }
-function speak(text, rate){
+function speak(text, rate, onstart){
   return new Promise(function(resolve){
     if(!window.speechSynthesis){ setTimeout(resolve, 900); return; }
     var done = false;
@@ -601,6 +616,7 @@ function speak(text, rate){
           u.lang = "en-US"; u.rate = rate || 0.9; u.volume = 1;
           var v = pickVoice(); if(v) u.voice = v;
           u.onend = finish; u.onerror = finish;
+          if(onstart) u.onstart = function(){ try{ onstart(); }catch(se){} };
           setTimeout(finish, 1800 + text.length * 120);
           try{ speechSynthesis.resume(); }catch(re){}
           speechSynthesis.speak(u);
@@ -620,6 +636,134 @@ function ttsUnlock(){
 var TTS_SAY = { "have": "hav" };
 function sayForm(w){ return TTS_SAY[w] || w; }
 function speakWord(w, rate){ return speak(sayForm(w) + ",", rate); }
+
+/* ---------- Sound mapping (orthographic mapping + heart words) ---------- */
+/* * = heart (tricky) part, ~ = quiet letter */
+var CHUNKS = {
+  "the":["th","e*"], "of":["o*","f*"], "to":["t","o*"], "do":["d","o*"], "into":["i","n","t","o*"],
+  "is":["i","s*"], "as":["a","s*"], "his":["h","i","s*"], "has":["h","a","s*"], "use":["u","s*","e~"],
+  "you":["y","ou*"], "was":["w","a*","s*"], "said":["s","ai*","d"], "are":["ar","e~"], "they":["th","ey*"],
+  "have":["h","a","v","e*"], "from":["f","r","o*","m"], "what":["wh","a*","t"], "other":["o*","th","er"],
+  "about":["a*","b","ou","t"], "one":["one*"], "all":["a*","ll"], "call":["c","a*","ll"], "water":["w","a*","t","er"],
+  "were":["w","er","e*"], "there":["th","ere*"], "their":["th","eir*"], "your":["y","our*"], "many":["m","a*","n","y"],
+  "some":["s","o*","m","e*"], "come":["c","o*","m","e*"], "would":["w","oul*","d"], "could":["c","oul*","d"],
+  "two":["t","w*","o*"], "people":["p","eo*","p","le"], "been":["b","ee*","n"], "who":["w*","h","o*"],
+  "write":["w*","r","i","t","e~"], "find":["f","i*","n","d"], "word":["w","or*","d"], "more":["m","or","e~"]
+};
+var TIPS = {
+  "the":"The pink part says uh.",
+  "of":"The O says uh, and the F sounds like the start of van.",
+  "to":"The O says oo, like in moon.", "do":"The O says oo, like in moon.", "into":"The O says oo, like in moon.",
+  "is":"The S sounds like the start of zoo.", "as":"The S sounds like the start of zoo.",
+  "his":"The S sounds like the start of zoo.", "has":"The S sounds like the start of zoo.",
+  "use":"The S sounds like the start of zoo.",
+  "you":"The pink part says oo, like in moon.",
+  "was":"The A says uh, and the S sounds like the start of zoo.",
+  "said":"The pink part says eh, like in bed.",
+  "they":"The pink part says ay, like in play.",
+  "have":"The E is quiet here.",
+  "from":"The O says uh.", "what":"The A says uh.", "other":"The O says uh.", "about":"The A says uh.",
+  "one":"The whole word is tricky. It sounds like won, like I won the game.",
+  "all":"The A says aw, like in saw.", "call":"The A says aw, like in saw.", "water":"The A says aw, like in saw.",
+  "were":"The E at the end is quiet.",
+  "there":"The pink part says air, like in hair.", "their":"The pink part says air, like in hair.",
+  "your":"The pink part says or, like in for.",
+  "many":"The A says eh, like in bed.",
+  "some":"The O says uh, and the E is quiet.", "come":"The O says uh, and the E is quiet.",
+  "would":"The pink part says oo, like in book.", "could":"The pink part says oo, like in book.",
+  "two":"The W is quiet, and the O says oo.",
+  "people":"The pink part says ee, like in see.",
+  "been":"The pink part says ih, like in pin.",
+  "who":"The W is quiet, and the O says oo.",
+  "write":"The W is quiet.",
+  "find":"The I says its name.",
+  "word":"The pink part says er, like in her."
+};
+var DIGRAPHS = ["igh","tch","th","sh","ch","wh","ck","ng","ph","ee","ea","oo","ou","ow","ai","ay","oa","oi","oy","er","ir","ur","or","ar","aw","ew","ey","ll","ss","ff"];
+function splitWord(w){
+  if(CHUNKS[w]) return CHUNKS[w].map(function(c){
+    return { g:c.replace(/[*~]/g,""), h:c.indexOf("*") > -1, q:c.indexOf("~") > -1 };
+  });
+  var out = [], i = 0;
+  while(i < w.length){
+    var hit = null;
+    for(var d = 0; d < DIGRAPHS.length; d++){
+      var dg = DIGRAPHS[d];
+      if(w.substr(i, dg.length) === dg && (!hit || dg.length > hit.length)) hit = dg;
+    }
+    var g = hit || w.charAt(i);
+    out.push({ g:g, h:false, q:false });
+    i += g.length;
+  }
+  if(w.length >= 4 && /[aeiou][^aeiou]e$/.test(w) && out.length && out[out.length-1].g === "e") out[out.length-1].q = true;
+  return out;
+}
+function setWordPlain(w){ wordEl.className = "word"; wordEl.textContent = displayWord(w); }
+function setWordMap(w){
+  var parts = splitWord(w);
+  wordEl.className = "word map";
+  wordEl.innerHTML = "";
+  for(var k = 0; k < parts.length; k++){
+    var s = document.createElement("span");
+    s.className = "ch" + (parts[k].h ? " h" : "") + (parts[k].q ? " q" : "");
+    s.textContent = (w === "i") ? "I" : parts[k].g;
+    wordEl.appendChild(s);
+  }
+}
+function chunkEls(){ return wordEl.querySelectorAll(".ch"); }
+function lightChunks(totalMs){
+  var els = chunkEls(), n = els.length, step = Math.max(180, totalMs / Math.max(1, n));
+  for(var k = 0; k < n; k++){
+    (function(el, t){ setTimeout(function(){ el.classList.add("lit"); }, t); })(els[k], k * step);
+  }
+}
+function pulseHearts(){
+  var els = wordEl.querySelectorAll(".ch.h");
+  for(var k = 0; k < els.length; k++){ els[k].classList.remove("pulse"); void els[k].offsetWidth; els[k].classList.add("pulse"); }
+}
+/* Speak the word, measure how long it takes, then say it slowly while the sound chunks light up. */
+function mapDemo(w, g){
+  var t0 = 0, dur = 900;
+  return speak(sayForm(w) + ",", 0.8, function(){ t0 = performance.now(); }).then(function(){
+    if(t0) dur = Math.max(400, performance.now() - t0);
+    return wait(350);
+  }).then(function(){
+    if(g !== jokeGen) return;
+    var slowMs = Math.min(3500, Math.max(900, dur * 1.7));
+    return speak(sayForm(w) + ",", 0.45, function(){ lightChunks(slowMs * 0.85); });
+  }).then(function(){
+    if(g !== jokeGen) return;
+    var els = chunkEls(); for(var k = 0; k < els.length; k++) els[k].classList.add("lit");
+    if(TIPS[w]){ pulseHearts(); return wait(250).then(function(){ return speak(TIPS[w], 0.9); }); }
+  });
+}
+
+/* ---------- Confusable partner for contrast cards ---------- */
+function lev(a, b){
+  var m = a.length, n = b.length, prev = [], cur, i, j;
+  for(j = 0; j <= n; j++) prev[j] = j;
+  for(i = 1; i <= m; i++){
+    cur = [i];
+    for(j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j-1] + 1, prev[j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+function sameSound(a, b){ return !!(acceptSet(a)[b] || acceptSet(b)[a]); }
+function confusable(a, b){
+  if(a === b || sameSound(a, b)) return false;
+  if(Math.min(a.length, b.length) >= 2 && lev(a, b) <= 1) return true;
+  if(a.length >= 3 && b.length >= 3 && a.slice(0,2) === b.slice(0,2) && Math.abs(a.length - b.length) <= 1) return true;
+  return false;
+}
+function findPartner(w){
+  var pool = FRY.slice(0, poolSize(state.level)), cands = [], hard = [];
+  for(var k = 0; k < pool.length; k++){
+    if(confusable(w, pool[k])){ cands.push(pool[k]); if((state.miss[pool[k]] || 0) > 0) hard.push(pool[k]); }
+  }
+  var pick = hard.length ? hard : cands;
+  return pick.length ? pick[Math.floor(Math.random() * pick.length)] : null;
+}
 
 /* ---------- Recognition ---------- */
 var SRCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -645,7 +789,7 @@ function initRec(){
       for(var j = 0; j < res.length; j++){
         var txt = res[j].transcript || "";
         if(j === 0) latest = txt;
-        if(matches(currentWord, txt)){ showHeard(txt); if(warmMode) warmSuccess(); else resolveSuccess(); return; }
+        if(matches(currentWord, txt)){ showHeard(txt); if(warmMode) warmSuccess(); else if(remedyMode) remedySuccess(); else resolveSuccess(); return; }
       }
     }
     if(latest) showHeard(latest);
@@ -660,7 +804,7 @@ function initRec(){
   };
   rec.onend = function(){
     setMicState(false);
-    if(wantListen && cardLive && cardMs > 1500 && restartsThisCard < 2){
+    if(wantListen && cardLive && (warmMode || remedyMode || cardMs > 1500) && restartsThisCard < 2){
       restartsThisCard++;
       clearTimeout(restartTO);
       restartTO = setTimeout(function(){ try{ rec.start(); }catch(e){} }, 400);
@@ -707,7 +851,8 @@ function clearTimer(){ clearInterval(timerInt); }
 
 /* ---------- Game flow ---------- */
 var deck = [], currentWord = "", cardLive = false;
-var cleared = 0, runFails = 0, runMissed = {}, runSeen = {};
+var cleared = 0, runFails = 0, runMissed = {}, runSeen = {}, runFailCount = {};
+var remedyMode = false, remedyTO = null;
 
 function updateHud(){
   chipLevel.textContent = "Lv " + state.level;
@@ -724,12 +869,13 @@ function startGame(){
   $("btnAgain").classList.remove("pulse");
   primeJoke();
   deck = buildDeck();
-  cleared = 0; runFails = 0; runMissed = {}; runSeen = {};
+  cleared = 0; runFails = 0; runMissed = {}; runSeen = {}; runFailCount = {};
   asrNetFails = 0;
   showScreen(scrGame);
   if(roundStuck.length) startWarmup(); else nextCard();
 }
 function nextCard(){
+  scrGame.classList.remove("tapmode");
   sayBanner.classList.remove("on");
   if(deck.length === 0){ finishRun(); return; }
   currentWord = deck.shift();
@@ -737,20 +883,26 @@ function nextCard(){
   restartsThisCard = 0;
   runSeen[currentWord] = true;
   cardEl.className = "card enter";
-  wordEl.textContent = displayWord(currentWord);
+  setWordPlain(currentWord);
   heardEl.textContent = "";
   updateHud();
   startTimer();
   startListen();
 }
-var warmTO = null, warmQueue = [], warmMode = false;
+var warmTO = null, warmQueue = [], warmMode = false, choiceLock = false;
 function startWarmup(){
-  warmQueue = roundStuck.slice();
+  warmQueue = [];
+  for(var k = 0; k < roundStuck.length; k++){
+    var p = findPartner(roundStuck[k]);
+    if(p) warmQueue.push({ kind:"contrast", w:roundStuck[k], p:p });
+    warmQueue.push({ kind:"echo", w:roundStuck[k] });
+  }
   warmMode = true;
   chipLeft.textContent = "Warm-up";
   nextWarmCard();
 }
 function nextWarmCard(){
+  scrGame.classList.remove("tapmode");
   sayBanner.classList.remove("on");
   clearTimeout(warmTO);
   if(!warmQueue.length){
@@ -760,20 +912,63 @@ function nextWarmCard(){
     speak("Ready? Go!", 1).then(function(){ if(g0 === jokeGen) nextCard(); });
     return;
   }
-  currentWord = warmQueue.shift();
-  cardLive = true;
+  var step = warmQueue.shift();
+  if(step.kind === "contrast"){ showContrast(step.w, step.p); return; }
+  currentWord = step.w;
+  cardLive = false;
   restartsThisCard = 0;
   cardEl.className = "card warm enter";
-  wordEl.textContent = displayWord(currentWord);
+  setWordMap(currentWord);
   heardEl.textContent = "";
   var g = jokeGen, ww = currentWord;
   sayBanner.textContent = "Warm-up! Say it with me!";
   sayBanner.classList.add("on");
-  speakWord(ww, 0.75).then(function(){ return wait(250); }).then(function(){
+  mapDemo(ww, g).then(function(){ return wait(250); }).then(function(){
     if(g !== jokeGen || currentWord !== ww || !warmMode) return;
+    cardLive = true;
     startListen();
     warmTO = setTimeout(function(){ warmMiss(g); }, 6000);
   });
+}
+function showContrast(w, p){
+  var g = jokeGen;
+  currentWord = w;
+  cardLive = false;
+  stopListen();
+  choiceLock = false;
+  var box = $("choices");
+  box.innerHTML = "";
+  var order = Math.random() < 0.5 ? [w, p] : [p, w];
+  order.forEach(function(x){
+    var b = document.createElement("button");
+    b.className = "choice";
+    b.textContent = displayWord(x);
+    b.onclick = function(){ pickChoice(b, x === w, w, g); };
+    box.appendChild(b);
+  });
+  scrGame.classList.add("tapmode");
+  cardEl.className = "card warm choose enter";
+  heardEl.textContent = "";
+  sayBanner.textContent = "Warm-up! Which one says " + displayWord(w) + "?";
+  sayBanner.classList.add("on");
+  speak("Which one says " + sayForm(w) + "?", 0.9);
+}
+function pickChoice(btn, right, w, g){
+  if(choiceLock || g !== jokeGen || !warmMode) return;
+  choiceLock = true;
+  ensureAudio();
+  var btns = $("choices").querySelectorAll(".choice");
+  if(right){
+    btn.classList.add("right");
+    sfx.good();
+    setTimeout(function(){ if(g === jokeGen && warmMode) nextWarmCard(); }, 800);
+  } else {
+    btn.classList.add("wrong");
+    for(var k = 0; k < btns.length; k++) if(btns[k] !== btn) btns[k].classList.add("right");
+    speak("This one says " + sayForm(w) + ".", 0.85).then(function(){ return wait(500); }).then(function(){
+      if(g === jokeGen && warmMode) nextWarmCard();
+    });
+  }
 }
 function warmSuccess(){
   if(!warmMode || !cardLive) return;
@@ -791,6 +986,13 @@ function warmMiss(g){
   speakWord(currentWord, 0.8).then(function(){ return wait(400); }).then(function(){
     if(g === jokeGen && warmMode) nextWarmCard();
   });
+}
+function requeue(w){
+  var n = runFailCount[w] = (runFailCount[w] || 0) + 1;
+  var pos = n === 1 ? Math.min(3, deck.length) : deck.length;
+  if(pos > 0 && deck[pos - 1] === w) pos = Math.min(pos + 1, deck.length);
+  if(pos < deck.length && deck[pos] === w) pos = Math.min(pos + 1, deck.length);
+  deck.splice(pos, 0, w);
 }
 function resolveSuccess(){
   if(!cardLive) return;
@@ -818,7 +1020,7 @@ function resolveFail(viaHelp){
   var doneStep = function(){
     if(g !== jokeGen) return;
     sayBanner.classList.remove("on");
-    deck.push(failedWord);
+    requeue(failedWord);
     cardEl.className = viaHelp ? "card away" : "card bad away";
     setTimeout(function(){ if(g === jokeGen) nextCard(); }, 420);
   };
@@ -832,19 +1034,25 @@ function resolveFail(viaHelp){
     }).then(doneStep);
   } else if(isStuck(failedWord)){
     sfx.bad();
-    cardEl.className = "card bad shake";
-    var spellOut = failedWord.toUpperCase().split("").join(", ");
+    remedyMode = true;
+    setWordMap(failedWord);
+    cardEl.className = "card bad";
+    sayBanner.textContent = "Look at the sounds...";
     wait(300).then(function(){
       if(g !== jokeGen) return;
-      return speakWord(failedWord, 0.75);
-    }).then(function(){
-      return wait(1200);
+      return mapDemo(failedWord, g);
     }).then(function(){
       if(g !== jokeGen) return;
-      return speak(spellOut + ", spells, " + sayForm(failedWord) + ",", 0.85);
+      sayBanner.textContent = "Now you read it!";
+      return speak("Now you read it.", 1);
     }).then(function(){
-      return wait(500);
-    }).then(doneStep);
+      if(g !== jokeGen || !remedyMode) return;
+      cardEl.className = "card";
+      cardLive = true;
+      restartsThisCard = 0;
+      startListen();
+      remedyTO = setTimeout(function(){ remedyEnd(false, g); }, 6000);
+    });
   } else {
     sfx.bad();
     cardEl.className = "card bad shake";
@@ -859,6 +1067,33 @@ function resolveFail(viaHelp){
     }).then(function(){
       return wait(400);
     }).then(doneStep);
+  }
+}
+function remedySuccess(){
+  if(!remedyMode || !cardLive) return;
+  remedyEnd(true, jokeGen);
+}
+function remedyEnd(ok, g){
+  if(g !== jokeGen || !remedyMode) return;
+  cardLive = false;
+  clearTimeout(remedyTO);
+  stopListen();
+  var w = currentWord;
+  var after = function(){
+    if(g !== jokeGen) return;
+    remedyMode = false;
+    sayBanner.classList.remove("on");
+    requeue(w);
+    cardEl.className = ok ? "card away" : "card bad away";
+    setTimeout(function(){ if(g === jokeGen) nextCard(); }, 420);
+  };
+  if(ok){
+    sfx.good();
+    cardEl.className = "card good";
+    sayBanner.textContent = "You got it!";
+    setTimeout(after, 800);
+  } else {
+    speakWord(w, 0.85).then(function(){ return wait(400); }).then(after);
   }
 }
 var PRAISE3 = ["Perfect round, NAME! You are a superstar!", "Wow, NAME! Every single word on the first try!", "Incredible, NAME! Three stars!"];
@@ -1177,7 +1412,10 @@ function quitToTitle(){
   jokeGen++;
   cardLive = false;
   warmMode = false;
+  remedyMode = false;
+  scrGame.classList.remove("tapmode");
   clearTimeout(warmTO);
+  clearTimeout(remedyTO);
   clearTimer(); stopListen();
   if(window.speechSynthesis){ try{ speechSynthesis.cancel(); }catch(e){} }
   sayBanner.classList.remove("on");
@@ -1203,8 +1441,9 @@ $("btnReset").onclick = function(){
 
 /* ---------- Help ---------- */
 helpBtn.onclick = function(){
-  if(!cardLive) return;
   ensureAudio();
+  if(warmMode || remedyMode){ if(currentWord) speakWord(currentWord, 0.8); return; }
+  if(!cardLive) return;
   resolveFail(true);
 };
 
