@@ -119,7 +119,7 @@ body{
 .hico{font-size:32px;line-height:1;}
 .hlbl{font-size:13px;font-weight:700;color:#5b4300;line-height:1;}
 
-.say{position:fixed;bottom:30px;left:0;right:130px;color:#fff;font-size:24px;font-weight:700;opacity:0;transition:opacity .2s;z-index:6;}
+.say{position:fixed;bottom:30px;left:0;right:130px;color:#fff;font-size:24px;font-weight:700;opacity:0;transition:opacity .2s;z-index:6;pointer-events:none;}
 .say.on{opacity:1;}
 
 /* Done */
@@ -328,7 +328,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.31 (2026-10-28)";
+var APP_VERSION = "v1.32 (2026-10-28)";
 
 var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 2;
 function isStuck(w){ return (state.stuck ? (state.stuck[w] || 0) : 0) >= STUCK_ROUNDS; }
@@ -410,29 +410,29 @@ var EQUIV = {
 var DIGITS = {"1":"one","2":"two","4":"four"};
 
 /* ---------- Poppy: grade 6-8 academic vocabulary ---------- */
-var VOCAB = [{"w": "predict","d": "to say what you think will happen","s": "Can you predict how the story will end?","o": "Predict comes from two Latin words: prae, meaning before, and dicere, meaning to say. To predict is to say it before it happens! Dicere is also where we get dictionary."},
+var VOCAB = [{"w": "predict","d": "to say what you think will happen","s": "Can you predict how the story will end?","o": "Predict comes from two Latin words: prae, meaning before, and dicere, meaning to say. To predict is to say it before it happens! Dicere is also where we get dictionary.","g": ["foresee"]},
   {"w": "compare","d": "to look at how things are alike and different","s": "Compare the two maps to see what changed.","o": "Compare comes from the Latin word comparare, meaning to pair up, from par, meaning equal. It is the same root as the word pair."},
   {"w": "evidence","d": "facts or signs that show something is true","s": "The muddy footprints were evidence that the dog had come inside.","o": "Evidence comes from the Latin word videre, meaning to see. Evidence is something you can see for yourself. Videre is also where we get the word video!","g": ["facts"]},
-  {"w": "summarize","d": "to tell the main points in a short way","s": "Summarize the chapter in three sentences.","o": "Summarize comes from the Latin word summa, meaning the top or the total. A summary gives you the sum of the whole story."},
+  {"w": "summarize","d": "to tell the main points in a short way","s": "Summarize the chapter in three sentences.","o": "Summarize comes from the Latin word summa, meaning the top or the total. A summary gives you the sum of the whole story.","g": ["short"]},
   {"w": "sequence","d": "the order in which things happen","s": "Put the pictures in the right sequence.","o": "Sequence comes from the Latin word sequi, meaning to follow. In a sequence, each step follows the one before it."},
   {"w": "contrast","d": "a clear difference between two things","s": "There is a big contrast between the hot desert and the snowy mountains.","o": "Contrast comes from Latin contra, meaning against, and stare, meaning to stand. Things in contrast stand against each other.","g": ["differ"]},
   {"w": "infer","d": "to figure something out from clues","s": "From her big smile, I can infer that she liked the gift.","o": "Infer comes from the Latin word inferre, meaning to bring in. When you infer, you bring in clues to reach an idea.","g": ["figure"]},
   {"w": "conclude","d": "to decide something after thinking it through","s": "After the experiment, we can conclude that plants need light.","o": "Conclude comes from the Latin word concludere, meaning to shut tight, from claudere, meaning to close. A conclusion closes the case!","g": ["figure"]},
   {"w": "identify","d": "to recognize something and say what it is","s": "Can you identify the bird by its song?","o": "Identify comes from the Latin word idem, meaning the same. When you identify something, you match it to the same thing you already know."},
-  {"w": "analyze","d": "to study something closely by looking at its parts","s": "Scientists analyze rocks to learn how old they are.","o": "Analyze comes from the Greek word analusis, meaning a loosening up. To analyze is to loosen something into its parts so you can study each one."},
+  {"w": "analyze","d": "to study something closely by looking at its parts","s": "Scientists analyze rocks to learn how old they are.","o": "Analyze comes from the Greek word analusis, meaning a loosening up. To analyze is to loosen something into its parts so you can study each one.","g": ["study"]},
   {"w": "significant","d": "important enough to really matter","s": "Winning the science fair was a significant moment for her.","o": "Significant comes from the Latin word significare, meaning to show by a sign. Something significant is a sign that matters.","g": ["important"]},
   {"w": "obvious","d": "easy to see or understand","s": "It was obvious that the cat had knocked over the vase.","o": "Obvious comes from the Latin word obvius, meaning in the way, from ob, in front of, and via, road. Something obvious is right there in your path!","g": ["clear"]},
-  {"w": "accurate","d": "exactly correct, with no mistakes","s": "Her measurements were accurate to the millimeter.","o": "Accurate comes from the Latin word accuratus, meaning done with care, from cura, meaning care. Cura is also the root of the word cure."},
+  {"w": "accurate","d": "exactly correct, with no mistakes","s": "Her measurements were accurate to the millimeter.","o": "Accurate comes from the Latin word accuratus, meaning done with care, from cura, meaning care. Cura is also the root of the word cure.","g": ["careful"]},
   {"w": "hypothesis","d": "an idea you can test to see if it is true","s": "Our hypothesis was that warm water would melt the ice faster.","o": "Hypothesis comes from two Greek words: hypo, meaning under, and thesis, meaning a placing. A hypothesis is the idea placed underneath an experiment, as its starting point.","g": ["idea"]},
-  {"w": "investigate","d": "to look into something carefully to find the truth","s": "The detectives will investigate what happened to the missing painting.","o": "Investigate comes from the Latin word vestigium, meaning a footprint or a track. To investigate is to follow the tracks!"},
+  {"w": "investigate","d": "to look into something carefully to find the truth","s": "The detectives will investigate what happened to the missing painting.","o": "Investigate comes from the Latin word vestigium, meaning a footprint or a track. To investigate is to follow the tracks!","g": ["study"]},
   {"w": "interpret","d": "to explain or figure out the meaning of something","s": "We had to interpret what the poem was really about.","o": "Interpret comes from the Latin word interpres, meaning a go-between or a translator. An interpreter stands between two sides and explains the meaning.","g": ["figure"]},
-  {"w": "emphasize","d": "to give something extra attention or importance","s": "The coach emphasized teamwork before the big game.","o": "Emphasize comes from the Greek word emphasis, meaning a showing or a display. When you emphasize something, you put it on display."},
+  {"w": "emphasize","d": "to give something extra attention or importance","s": "The coach emphasized teamwork before the big game.","o": "Emphasize comes from the Greek word emphasis, meaning a showing or a display. When you emphasize something, you put it on display.","g": ["stress"]},
   {"w": "evaluate","d": "to judge how good or useful something is","s": "Evaluate each website before you use it for your report.","o": "Evaluate comes from the Latin word valere, meaning to be strong or to be worth something. It is the same root as the word value."},
   {"w": "perspective","d": "a point of view; the way someone sees things","s": "The story is told from the dog's perspective.","o": "Perspective comes from the Latin word perspicere, meaning to look through, from specere, meaning to look. Specere is also the root of spectacles, another word for glasses!"},
   {"w": "consequence","d": "something that happens as a result of an action","s": "One consequence of missing the bus was being late to school.","o": "Consequence comes from the Latin word consequi, meaning to follow closely. A consequence follows right behind an action."},
   {"w": "relevant","d": "connected to the topic being discussed","s": "Only include facts that are relevant to your question.","o": "Relevant comes from the Latin word relevare, meaning to raise up or to lighten."},
   {"w": "strategy","d": "a plan for reaching a goal","s": "Her strategy was to answer the easy questions first.","o": "Strategy comes from the Greek word strategos, meaning an army general. Strategy was first the skill of leading an army to victory.","g": ["way"]},
-  {"w": "survive","d": "to stay alive or keep going through something hard","s": "Camels can survive for days without water.","o": "Survive comes from Latin super, meaning beyond, and vivere, meaning to live. To survive is to live beyond danger."},
+  {"w": "survive","d": "to stay alive or keep going through something hard","s": "Camels can survive for days without water.","o": "Survive comes from Latin super, meaning beyond, and vivere, meaning to live. To survive is to live beyond danger.","g": ["tough"]},
   {"w": "transform","d": "to change completely in form or appearance","s": "A caterpillar will transform into a butterfly.","o": "Transform comes from Latin trans, meaning across, and forma, meaning shape. To transform is to move across into a brand new shape.","g": ["change"]},
   {"w": "adapt","d": "to change in order to fit a new situation","s": "Polar bears adapt to the cold with thick fur and fat.","o": "Adapt comes from Latin ad, meaning to, and aptare, meaning to fit. To adapt is to make yourself fit. It shares a root with the word apt.","g": ["change"]},
   {"w": "benefit","d": "something good that helps you","s": "One benefit of reading is learning new words.","o": "Benefit comes from Latin bene, meaning well, and facere, meaning to do. A benefit is something done well for you."},
@@ -448,13 +448,13 @@ var VOCAB = [{"w": "predict","d": "to say what you think will happen","s": "Can 
   {"w": "specific","d": "exact and particular, not general","s": "Give a specific example from the text.","o": "Specific comes from the Latin word species, meaning a kind or a type. It is the same root as the word species, used for kinds of animals and plants."},
   {"w": "technique","d": "a special way of doing something with skill","s": "The artist used a new technique to paint the sky.","o": "Technique comes from the Greek word tekhne, meaning art or skill. Tekhne is also the root of technology.","g": ["way"]},
   {"w": "theory","d": "an explanation based on ideas and evidence","s": "Scientists tested the theory with many experiments.","o": "Theory comes from the Greek word theoria, meaning a looking at or a viewing. A theory is a way of looking at how the world works.","g": ["idea"]},
-  {"w": "valid","d": "based on good reasons and fair to accept","s": "Being sick is a valid reason to miss practice.","o": "Valid comes from the Latin word validus, meaning strong. A valid reason is a strong one."},
+  {"w": "valid","d": "based on good reasons and fair to accept","s": "Being sick is a valid reason to miss practice.","o": "Valid comes from the Latin word validus, meaning strong. A valid reason is a strong one.","g": ["fair"]},
   {"w": "cite","d": "to name a source as proof for what you say","s": "Cite the page where you found the answer.","o": "Cite comes from the Latin word citare, meaning to call or to summon. When you cite a source, you call it in to back you up."},
   {"w": "explicit","d": "stated clearly so there is no doubt","s": "The directions were explicit: no phones during the test.","o": "Explicit comes from the Latin word explicitus, meaning unfolded. Something explicit is laid out flat for everyone to see.","g": ["clear"]},
   {"w": "coherent","d": "logical and easy to follow","s": "Her essay was coherent from beginning to end.","o": "Coherent comes from the Latin word cohaerere, meaning to stick together. The ideas in a coherent essay stick together. Haerere is also the root of adhesive, a word for glue.","g": ["clear"]},
   {"w": "debate","d": "a discussion where people argue different sides","s": "Our class held a debate about school uniforms.","o": "Debate comes from the old French word debatre, meaning to fight, from battre, meaning to beat. It is the same root as the word battle."},
   {"w": "candidate","d": "a person trying to win a job or an election","s": "Each candidate gave a speech to the class.","o": "Candidate comes from the Latin word candidatus, meaning dressed in white. In ancient Rome, people running for office wore bright white togas!"},
-  {"w": "disaster","d": "a sudden event that causes great damage","s": "The flood was a disaster for the small town.","o": "Disaster comes from the Italian word disastro, from dis, meaning bad, and astro, meaning star. Long ago, people blamed terrible events on unlucky stars."},
+  {"w": "disaster","d": "a sudden event that causes great damage","s": "The flood was a disaster for the small town.","o": "Disaster comes from the Italian word disastro, from dis, meaning bad, and astro, meaning star. Long ago, people blamed terrible events on unlucky stars.","g": ["disaster"]},
   {"w": "maintain","d": "to keep something in good shape or keep it going","s": "It takes work to maintain a garden.","o": "Maintain comes from the Latin words manu tenere, meaning to hold in the hand."},
   {"w": "obtain","d": "to get something, usually with some effort","s": "You must obtain permission before the field trip.","o": "Obtain comes from the Latin word obtinere, meaning to hold on to."},
   {"w": "principle","d": "a basic rule or belief","s": "Honesty is an important principle in our family.","o": "Principle comes from the Latin word principium, meaning a beginning, from princeps, meaning first. A principle is a first, basic truth."},
@@ -474,8 +474,68 @@ var VOCAB = [{"w": "predict","d": "to say what you think will happen","s": "Can 
   {"w": "minimum","d": "the smallest amount that is allowed or possible","s": "You need a minimum of three sources for the report.","o": "Minimum comes from the Latin word minimus, meaning the smallest. It shares its root with the word minor."},
   {"w": "objective","d": "a goal you are working toward","s": "Our objective is to finish the model by Friday.","o": "Objective comes from the Latin word objectum, meaning something put in front. An objective is set in front of you to aim at."},
   {"w": "respond","d": "to answer or react to something","s": "Please respond to the invitation by Monday.","o": "Respond comes from the Latin word respondere, meaning to promise in return."},
-  {"w": "resource","d": "something useful you can draw on when needed","s": "Fresh water is a precious natural resource.","o": "Resource comes from the old French word resourdre, meaning to rise again. A resource is help that rises up when you need it."}];
+  {"w": "resource","d": "something useful you can draw on when needed","s": "Fresh water is a precious natural resource.","o": "Resource comes from the old French word resourdre, meaning to rise again. A resource is help that rises up when you need it."},
+  {"w": "collapse","d": "to fall down or cave in suddenly","s": "The sandcastle began to collapse when the wave hit it.","o": "Collapse comes from the Latin word collabi, meaning to fall together, from labi, meaning to slip. When something collapses, all its parts slip and fall at once."},
+  {"w": "eliminate","d": "to get rid of something completely","s": "Our team needs one more win to eliminate the other side from the playoffs.","o": "Eliminate comes from Latin e, meaning out, and limen, meaning a doorway's threshold. To eliminate something was to push it right out the door!"},
+  {"w": "enhance","d": "to make something better or stronger","s": "A pinch of salt can enhance the flavor of a cookie.","o": "Enhance comes from an old French word meaning to raise up, from the Latin word altus, meaning high. Altus is also the root of altitude."},
+  {"w": "exaggerate","d": "to make something sound bigger or better than it really is","s": "Don't exaggerate: the fish was not as big as a car.","o": "Exaggerate comes from the Latin word exaggerare, meaning to heap up, from agger, meaning a pile. When you exaggerate, you pile it on!","g": ["stress"]},
+  {"w": "anticipate","d": "to expect something and get ready for it","s": "We anticipate a big crowd, so we made extra snacks.","o": "Anticipate comes from Latin ante, meaning before, and capere, meaning to take. To anticipate is to take hold of something before it arrives. Capere is also the root of capture.","g": ["foresee"]},
+  {"w": "contradict","d": "to say the opposite of what someone else said","s": "My brother likes to contradict everything I say.","o": "Contradict comes from Latin contra, meaning against, and dicere, meaning to say. To contradict is to speak against. It shares dicere with predict!"},
+  {"w": "tedious","d": "long, slow, and boring","s": "Sorting all those tiny beads was tedious work.","o": "Tedious comes from the Latin word taedium, meaning weariness or boredom. Tedious work wears you out."},
+  {"w": "thrive","d": "to grow strong and do very well","s": "Tomato plants thrive in warm, sunny weather.","o": "Thrive comes from the Old Norse word thrifask, meaning to grab hold for yourself and prosper. It is related to the word thrift, which once meant doing well."},
+  {"w": "reluctant","d": "unwilling or hesitant to do something","s": "The puppy was reluctant to step into the cold water.","o": "Reluctant comes from the Latin word reluctari, meaning to struggle against, from luctari, meaning to wrestle. A reluctant person is wrestling with the idea.","g": ["hold"]},
+  {"w": "vulnerable","d": "easy to hurt or attack","s": "Baby turtles are vulnerable as they crawl to the sea.","o": "Vulnerable comes from the Latin word vulnus, meaning a wound. Something vulnerable can be wounded easily."},
+  {"w": "coincide","d": "to happen at the same time","s": "This year my birthday will coincide with Thanksgiving.","o": "Coincide comes from Latin co, meaning together, and incidere, meaning to fall upon. Things that coincide fall on the same moment. It is the root of coincidence."},
+  {"w": "dilemma","d": "a hard choice between two options","s": "Her dilemma was whether to go to the party or the game.","o": "Dilemma comes from Greek di, meaning two, and lemma, meaning an idea you assume. People say you are caught on the horns of a dilemma, as if two horns are pointing at you."},
+  {"w": "empathy","d": "the ability to understand and share someone else's feelings","s": "She showed empathy by sitting with her sad friend.","o": "Empathy was made up about one hundred years ago from Greek en, meaning in, and pathos, meaning feeling. Empathy is feeling your way into someone else's heart."},
+  {"w": "persevere","d": "to keep trying even when things are hard","s": "If you persevere, you will finally land the cartwheel.","o": "Persevere comes from Latin per, meaning very, and severus, meaning strict or serious. To persevere is to stay very serious about your goal.","g": ["tough"]},
+  {"w": "resilient","d": "able to bounce back after something hard","s": "The resilient team came back after losing the first game.","o": "Resilient comes from the Latin word resilire, meaning to leap back, from salire, meaning to jump. A resilient person jumps right back up.","g": ["tough"]},
+  {"w": "tangible","d": "real enough to touch or clearly see","s": "A trophy is a tangible reward for hard work.","o": "Tangible comes from the Latin word tangere, meaning to touch. A tangent line in math just touches a circle, and it comes from the same root."},
+  {"w": "feasible","d": "possible to do","s": "Building a treehouse in one weekend is feasible if everyone helps.","o": "Feasible comes from the French word faisible, from faire, meaning to do. Something feasible is doable.","g": ["possible"]},
+  {"w": "plausible","d": "reasonable and possibly true","s": "His excuse sounded plausible, but was it true?","o": "Plausible comes from the Latin word plaudere, meaning to clap. It first meant deserving applause. Plaudere is also the root of applause!","g": ["possible"]},
+  {"w": "prominent","d": "important and easy to notice","s": "The prominent scientist spoke at our school.","o": "Prominent comes from the Latin word prominere, meaning to stick out. Something prominent sticks out from the crowd.","g": ["important"]},
+  {"w": "candid","d": "honest and direct","s": "She gave a candid answer about why she was upset.","o": "Candid comes from the Latin word candidus, meaning bright white. It is the same root as candidate, because Roman candidates wore white togas to look honest!","g": ["honest"]},
+  {"w": "integrity","d": "being honest and doing what is right, even when no one is watching","s": "He showed integrity by returning the wallet he found.","o": "Integrity comes from the Latin word integer, meaning whole and untouched. A person with integrity is whole all the way through. Integer is also the math word for a whole number.","g": ["honest"]},
+  {"w": "benevolent","d": "kind and wanting to help others","s": "The benevolent neighbor shoveled everyone's sidewalk.","o": "Benevolent comes from Latin bene, meaning well, and volens, meaning wishing. A benevolent person wishes others well. Bene is also in benefit."},
+  {"w": "skeptical","d": "doubting whether something is true","s": "I was skeptical when he said his dog could talk.","o": "Skeptical comes from the Greek word skeptikos, meaning thoughtful or questioning, from a word meaning to look carefully. A skeptic looks carefully before believing."},
+  {"w": "subtle","d": "so small or slight that it is hard to notice","s": "There was a subtle hint of mint in the cookies.","o": "Subtle comes from the Latin word subtilis, meaning finely woven, from sub, meaning under, and tela, meaning a web. Something subtle is as fine as a thread.","g": ["unclear"]},
+  {"w": "concise","d": "short and clear, using few words","s": "Keep your answer concise: two sentences at most.","o": "Concise comes from the Latin word concidere, meaning to cut up, from caedere, meaning to cut. A concise answer has the extra words cut away.","g": ["short"]},
+  {"w": "elaborate","d": "to add more details to explain something","s": "Can you elaborate on how you solved the puzzle?","o": "Elaborate comes from Latin e, meaning out, and laborare, meaning to work. To elaborate is to work out the details. Laborare is the root of labor."},
+  {"w": "deduce","d": "to reach an answer by careful reasoning from facts","s": "From the clues, the detective could deduce who took the cake.","o": "Deduce comes from Latin de, meaning down from, and ducere, meaning to lead. Your reasoning leads you down to the answer. Ducere is also the root of conductor.","g": ["figure"]},
+  {"w": "imply","d": "to suggest something without saying it directly","s": "Her yawn seemed to imply that she was bored.","o": "Imply comes from the Latin word implicare, meaning to fold in. When you imply something, the meaning is folded inside your words.","g": ["figure"]},
+  {"w": "inevitable","d": "certain to happen; impossible to avoid","s": "With dark clouds everywhere, rain seemed inevitable.","o": "Inevitable comes from Latin in, meaning not, and evitabilis, meaning avoidable. Something inevitable cannot be avoided."},
+  {"w": "diminish","d": "to make or become smaller or weaker","s": "The noise began to diminish as the parade moved away.","o": "Diminish comes from the Latin word minuere, meaning to make smaller. It shares a root with minus and minor.","g": ["lessen"]},
+  {"w": "superficial","d": "only on the surface; not deep","s": "Luckily, the scratch on my knee was superficial.","o": "Superficial comes from Latin super, meaning above, and facies, meaning face. Something superficial stays on the face of things."},
+  {"w": "versatile","d": "able to do many different things well","s": "A versatile player can play any position on the field.","o": "Versatile comes from the Latin word versatilis, meaning turning easily, from vertere, meaning to turn. A versatile person can turn to any task."},
+  {"w": "advocate","d": "to speak up in support of someone or something","s": "The students advocate for a longer recess.","o": "Advocate comes from Latin ad, meaning to, and vocare, meaning to call. An advocate is someone called in to speak for you. Vocare is the root of voice and vocal."},
+  {"w": "allocate","d": "to give out shares of something for a purpose","s": "We need to allocate ten minutes for each speaker.","o": "Allocate comes from Latin ad, meaning to, and locare, meaning to place, from locus, meaning a place. To allocate is to put things in their places. Locus is the root of location."},
+  {"w": "criteria","d": "the standards used to judge something","s": "The judges used three criteria: taste, looks, and creativity.","o": "Criteria is the plural of criterion, from the Greek word kriterion, meaning a way to judge, from krites, meaning a judge. A critic is a kind of judge too!"},
+  {"w": "phenomenon","d": "something that happens and can be observed, often something unusual","s": "A rainbow is a beautiful natural phenomenon.","o": "Phenomenon comes from the Greek word phainomenon, meaning something that appears, from phainein, meaning to show. When there is more than one, they are called phenomena."},
+  {"w": "catastrophe","d": "a terrible event that causes huge damage","s": "The earthquake was a catastrophe for the city.","o": "Catastrophe comes from the Greek word katastrophe, meaning an overturning. In ancient Greek plays, the catastrophe was the big turn at the very end of the story.","g": ["disaster"]},
+  {"w": "comprehensive","d": "complete and covering everything","s": "The guide gave a comprehensive list of every trail on the island.","o": "Comprehensive comes from the Latin word comprehendere, meaning to grab hold of completely. A comprehensive list grabs everything. It is the root of comprehend."},
+  {"w": "contemplate","d": "to think deeply about something for a long time","s": "She sat by the ocean to contemplate her next story.","o": "Contemplate comes from the Latin word templum, a space Roman priests marked out to watch the sky for signs. To contemplate was to watch closely and think. Templum is also where temple comes from."},
+  {"w": "nostalgia","d": "a warm, wistful feeling about the past","s": "Old photos fill Grandma with nostalgia.","o": "Nostalgia was invented in 1688 by a Swiss medical student. He combined Greek nostos, meaning homecoming, and algos, meaning pain, to name the ache of homesickness."},
+  {"w": "hypocrite","d": "a person who says one thing but does another","s": "He called me a hypocrite for eating candy after telling him not to.","o": "Hypocrite comes from the Greek word hypokrites, meaning an actor on a stage. A hypocrite is someone pretending, like an actor playing a part."},
+  {"w": "prejudice","d": "an unfair opinion formed without knowing the facts","s": "Getting to know new people helps break down prejudice.","o": "Prejudice comes from Latin prae, meaning before, and judicium, meaning judgment. Prejudice is judging before you know the facts."},
+  {"w": "precedent","d": "an earlier example that guides later decisions","s": "Last year's snow day set a precedent for closing school.","o": "Precedent comes from the Latin word praecedere, meaning to go before. A precedent is an example that went before."},
+  {"w": "legitimate","d": "allowed by the rules or the law; real and fair","s": "Being sick is a legitimate reason to stay home.","o": "Legitimate comes from the Latin word legitimus, meaning lawful, from lex, meaning law. Lex is also the root of legal.","g": ["fair"]},
+  {"w": "hierarchy","d": "a system where people or things are ranked from top to bottom","s": "In a wolf pack, there is a clear hierarchy.","o": "Hierarchy comes from Greek hieros, meaning sacred, and arkhein, meaning to rule. It first described the ranks of priests, from highest to lowest."},
+  {"w": "inhibit","d": "to hold back or slow something down","s": "Cold weather can inhibit the growth of plants.","o": "Inhibit comes from Latin in and habere, meaning to hold. To inhibit something is to hold it back.","g": ["hold"]},
+  {"w": "fluctuate","d": "to keep rising and falling, changing up and down","s": "Temperatures fluctuate a lot in the desert.","o": "Fluctuate comes from the Latin word fluctus, meaning a wave. Things that fluctuate go up and down like waves.","g": ["change"]},
+  {"w": "mitigate","d": "to make something less harmful or severe","s": "Planting trees can mitigate flooding.","o": "Mitigate comes from the Latin word mitis, meaning gentle or soft. To mitigate a problem is to make it gentler.","g": ["lessen"]},
+  {"w": "undermine","d": "to weaken something little by little, often secretly","s": "Staying up late can undermine your sports practice.","o": "Undermine first meant digging tunnels under a castle wall to make it fall down. Now it means weakening anything from underneath.","g": ["lessen"]},
+  {"w": "synthesize","d": "to combine separate parts into a new whole","s": "Synthesize the ideas from all three articles in your essay.","o": "Synthesize comes from Greek syn, meaning together, and tithenai, meaning to put. To synthesize is to put things together."},
+  {"w": "scrutinize","d": "to examine something very closely","s": "The jeweler will scrutinize the diamond for flaws.","o": "Scrutinize comes from the Latin word scrutari, meaning to search carefully. Some word experts think it is linked to scruta, meaning old rags, as if digging through a rag pile.","g": ["study"]},
+  {"w": "meticulous","d": "extremely careful about every small detail","s": "She was meticulous about labeling every jar.","o": "Meticulous comes from the Latin word meticulosus, meaning fearful, from metus, meaning fear. It once meant timid. Today it means careful, like someone afraid to make a mistake.","g": ["careful"]},
+  {"w": "pragmatic","d": "practical; focused on what actually works","s": "Taking the bus was the pragmatic choice when it rained.","o": "Pragmatic comes from the Greek word pragma, meaning a deed or a thing done. A pragmatic person cares about getting things done."},
+  {"w": "arbitrary","d": "chosen by chance or whim, not for a good reason","s": "The rule seemed arbitrary, so we asked why it existed.","o": "Arbitrary comes from the Latin word arbiter, meaning a judge. Something arbitrary depends only on one person's choice, not on a reason."},
+  {"w": "ambiguous","d": "having more than one possible meaning; unclear","s": "The ending of the movie was ambiguous, so we argued about it.","o": "Ambiguous comes from the Latin word ambigere, meaning to wander or be unsure, from ambi, meaning both ways. Ambi is also in ambidextrous, meaning able to use both hands.","g": ["unclear"]},
+  {"w": "paradox","d": "a statement that seems to contradict itself but may be true","s": "It is a paradox that the more you rush, the slower you go.","o": "Paradox comes from Greek para, meaning against, and doxa, meaning belief. A paradox goes against what you expect to believe."},
+  {"w": "zealous","d": "full of eager energy for a cause","s": "The zealous fans cheered for the whole game.","o": "Zealous comes from the Greek word zelos, meaning eager rivalry. Fun fact: jealous comes from the very same root!"},
+  {"w": "ubiquitous","d": "found everywhere","s": "On Maui, chickens seem ubiquitous.","o": "Ubiquitous comes from the Latin word ubique, meaning everywhere, from ubi, meaning where."}];
 var VOCAB_WORDS = VOCAB.map(function(v){ return v.w; });
+var VOCAB_T1 = 65; /* words after this are the Expert tier */
+function isExpert(w){ return VOCAB_WORDS.indexOf(w) >= VOCAB_T1; }
 
 
 /* ---------- State ---------- */
@@ -877,7 +937,7 @@ function findPartner(w){
 /* ---------- Vocabulary mode (Poppy) ---------- */
 var VMAP = {}; VOCAB.forEach(function(v){ VMAP[v.w] = v; });
 var vPhase = null, introMode = false, introQueue = [], roundIntro = [], vChoiceLock = false, vPronMiss = false, lastOrigin = null, introSeq = 0;
-function normV(t){ return t.replace(/ise$/, "ize").replace(/yse$/, "yze").replace(/ised$/, "ized").replace(/ysed$/, "yzed"); }
+function normV(t){ return t.replace(/ys(e|ed|es|ing)$/, "yz$1").replace(/is(e|ed|es|ing)$/, "iz$1"); }
 function vocabMatch(target, transcript){
   var clean = transcript.toLowerCase().replace(/'/g, "").replace(/[^a-z\s]/g, " ").trim();
   if(!clean) return false;
@@ -885,12 +945,14 @@ function vocabMatch(target, transcript){
   if(toks.length > 1) toks.push(toks.join(""));
   var tg = normV(target);
   var tol = tg.length >= 9 ? 2 : (tg.length >= 5 ? 1 : 0);
-  var stem = tg.length > 4 ? tg.slice(0, tg.length - 1) : tg;
+  var base = /e$/.test(tg) ? tg.slice(0, -1) : tg;
   for(var k = 0; k < toks.length; k++){
     var t = normV(toks[k]);
     if(t === tg) return true;
-    if(tol && Math.abs(t.length - tg.length) <= tol && lev(t, tg) <= tol) return true;
-    if(t.length > tg.length && t.length - tg.length <= 3 && t.indexOf(stem) === 0) return true;
+    /* near-miss spelling from the recognizer: the start of the word must still match */
+    if(tol && t.slice(0, 2) === tg.slice(0, 2) && Math.abs(t.length - tg.length) <= tol && lev(t, tg) <= tol) return true;
+    /* word endings: predicted, summarizing, analyzes */
+    if(t.indexOf(base) === 0 && /^(e|s|es|d|ed|ing|ly|r|er|ers|ion|ions)$/.test(t.slice(base.length))) return true;
   }
   return false;
 }
@@ -955,7 +1017,7 @@ function nextIntro(){
     nextIntro();
   };
   box.appendChild(b);
-  sayBanner.textContent = "New word!";
+  sayBanner.textContent = isExpert(w) ? "New expert word!" : "New word!";
   sayBanner.classList.add("on");
   speakIntro(w);
 }
@@ -1564,6 +1626,7 @@ function finishRun(){
     for(var nk = before; nk < before + add; nk++) newWordsArr.push(LIST()[nk]);
   }
   state.newWords = newWordsArr;
+  var expertUnlock = isVocab() && newWordsArr.indexOf(VOCAB_WORDS[VOCAB_T1]) > -1;
   saveState();
   refreshLevelLabels();
 
@@ -1580,6 +1643,7 @@ function finishRun(){
     var extra = before >= LIST().length ? "All " + LIST().length + " words are in play!" : "Practice round next: time to master the tricky ones!";
     ds.textContent = (ds.textContent ? ds.textContent + " " : "") + extra;
   }
+  if(expertUnlock){ var dsx = $("doneSub"); dsx.textContent = (dsx.textContent ? dsx.textContent + " " : "") + "Expert words unlocked!"; }
   $("nextLevel").textContent = "Level " + state.level + " is ready";
 
   showScreen(scrDone);
@@ -1596,6 +1660,9 @@ function finishRun(){
     speak(pickPraise(starCount, kidName), 0.95).then(function(){
       if(gen !== jokeGen) return;
       if(conquered.length) return speak("You beat the word " + displayWord(conquered[0]) + "!", 0.95);
+    }).then(function(){
+      if(gen !== jokeGen) return;
+      if(expertUnlock) return speak("You finished all " + VOCAB_T1 + " starter words. Expert words unlocked!", 0.95);
     }).then(function(){
       if(gen !== jokeGen) return;
       if(newWordsArr.length) return speak((newWordsArr.length > 1 ? "New words: " : "New word: ") + newWordsArr.map(displayWord).join(", ") + ",", 0.85);
@@ -1753,7 +1820,7 @@ function fatal(kind){
 var overlay = $("overlay");
 function refreshLevelLabels(){
   var P = poolSize(state.level);
-  $("titleLevel").innerHTML = "Level " + state.level + " &bull; " + P + " words";
+  $("titleLevel").innerHTML = "Level " + state.level + " &bull; " + P + " words" + (isVocab() && P > VOCAB_T1 ? " &bull; Expert" : "");
   $("lvlVal").value = state.level;
   $("lvlVal").max = maxLevel();
   $("lvlNote").innerHTML = "Level " + state.level + " &bull; " + P + " words in play. Level changes apply to the next round.";
