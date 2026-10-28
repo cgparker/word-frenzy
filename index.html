@@ -200,6 +200,25 @@ input.lvlnum{width:84px;padding:8px 6px;}
 .err h1{color:#fff;font-size:34px;margin:0 0 12px;}
 .err p{color:rgba(255,255,255,.94);font-size:19px;max-width:560px;line-height:1.45;margin:0 0 26px;}
 
+/* Player picker + vocabulary mode */
+.picker{display:flex;gap:12px;margin:0 0 18px;flex-wrap:wrap;justify-content:center;}
+.pick{font-family:inherit;font-weight:700;font-size:20px;padding:10px 24px;border-radius:999px;border:3px solid rgba(255,255,255,.55);background:rgba(255,255,255,.15);color:#fff;cursor:pointer;}
+.pick.sel{background:#fff;color:var(--bg2);border-color:#fff;}
+.word.vw{font-size:clamp(44px,12vw,120px);}
+.word.vw.long{font-size:clamp(34px,8.5vw,96px);}
+.word.vw.sm{font-size:clamp(30px,7vw,60px);}
+.vbox{display:none;margin:14px auto 0;max-width:620px;}
+.card.intro .vbox,.card.vchoose .vbox{display:block;}
+.vdef{font-size:clamp(18px,4.2vw,26px);font-weight:600;line-height:1.35;}
+.vsent{font-size:clamp(16px,3.6vw,21px);font-style:italic;color:#5a6b80;margin-top:10px;line-height:1.4;}
+.card.intro{background:#eef7ff;}
+.card.intro .choices{display:flex;margin-top:18px;}
+.card.vchoose{padding-top:4vh;padding-bottom:4vh;}
+.card.vchoose .choices{display:flex;flex-direction:column;gap:10px;margin-top:16px;align-items:stretch;}
+.choice.def{font-family:'Fredoka',sans-serif;font-size:clamp(16px,3.8vw,20px);font-weight:600;text-align:left;padding:12px 16px;border-width:3px;box-shadow:0 4px 0 #e3d9bd;line-height:1.3;}
+.choice.def.right{box-shadow:0 4px 0 var(--palm-dk);}
+.jokecard.origin .jpunch{font-size:19px;color:var(--ink);font-weight:600;}
+
 @media (prefers-reduced-motion:reduce){
   *{animation:none !important;transition:none !important;}
 }
@@ -220,7 +239,8 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <!-- Title -->
 <div class="screen on" id="scrTitle">
   <h1 class="logo">Word Frenzy &#9889;</h1>
-  <p class="tag">Say the word before the timer runs out!</p>
+  <p class="tag" id="tagLine">Say the word before the timer runs out!</p>
+  <div class="picker" id="picker"><button class="pick" id="pickHenry" data-p="henry">Henry</button><button class="pick" id="pickPoppy" data-p="poppy">Poppy</button></div>
   <div class="lvlchip" id="titleLevel">Level 1 &bull; 10 words</div>
   <button class="btn" id="btnStart">Start</button>
   <button class="linkish" id="gearTitle">Parent settings</button>
@@ -230,7 +250,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <div class="screen" id="scrGame">
   <div class="stage">
     <div class="stack"><b></b><b></b></div>
-    <div class="card" id="card"><div class="word" id="word">the</div><div class="choices" id="choices"></div></div>
+    <div class="card" id="card"><div class="word" id="word">the</div><div class="vbox" id="vbox"><div class="vdef" id="vdef"></div><div class="vsent" id="vsent"></div></div><div class="choices" id="choices"></div></div>
   </div>
   <div class="microw"><div class="ring" id="ring">&#127908;</div><span id="micLabel">Listening...</span></div>
   <div class="heard" id="heard"></div>
@@ -245,7 +265,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
   <div class="donesub" id="doneSub"></div>
   <div class="newcard" id="newCard" style="display:none"><small id="newLabel">NEW WORD</small><span id="newWord"></span></div>
   <div class="jokecard" id="jokeCard" style="display:none">
-    <small>&#129345; JOKE TIME</small>
+    <small id="jokeLabel">&#129345; JOKE TIME</small>
     <div class="jsetup" id="jokeSetup"></div>
     <div class="jpunch" id="jokePunch"></div>
     <button class="btn small mango" id="btnJokeAgain">Hear it again</button>
@@ -297,7 +317,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
       <button class="switch onn" id="swHeard" aria-label="Toggle heard text"></button>
     </div>
     <div class="row">
-      <label>Start over from Level 1</label>
+      <label>Start this player over</label>
       <button class="danger" id="btnReset">Reset</button>
     </div>
     <button class="btn small closep" id="btnCloseP">Done</button>
@@ -308,7 +328,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.30 (2026-10-27)";
+var APP_VERSION = "v1.31 (2026-10-28)";
 
 var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 2;
 function isStuck(w){ return (state.stuck ? (state.stuck[w] || 0) : 0) >= STUCK_ROUNDS; }
@@ -389,28 +409,115 @@ var EQUIV = {
 
 var DIGITS = {"1":"one","2":"two","4":"four"};
 
-/* ---------- State ---------- */
-var KEY = "wordfrenzy_v1";
-var memFallback = null;
-function loadState(){
-  try{ var s = localStorage.getItem(KEY); if(s) return JSON.parse(s); }catch(e){}
-  return memFallback;
-}
-function saveState(){
-  try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){ memFallback = state; }
-}
-var state = loadState() || { level:1, miss:{}, secs:10, showHeard:true, name:"Henry" };
-if(!state.miss) state.miss = {};
-if(!state.secs) state.secs = 10;
-if(state.showHeard === undefined) state.showHeard = true;
-if(state.name === undefined) state.name = "Henry";
-if(!state.jokeIds) state.jokeIds = [];
-if(state.voiceName === undefined) state.voiceName = "";
-if(!state.streak) state.streak = {};
-if(!state.newWords) state.newWords = [];
-if(!state.stuck) state.stuck = {};
+/* ---------- Poppy: grade 6-8 academic vocabulary ---------- */
+var VOCAB = [{"w": "predict","d": "to say what you think will happen","s": "Can you predict how the story will end?","o": "Predict comes from two Latin words: prae, meaning before, and dicere, meaning to say. To predict is to say it before it happens! Dicere is also where we get dictionary."},
+  {"w": "compare","d": "to look at how things are alike and different","s": "Compare the two maps to see what changed.","o": "Compare comes from the Latin word comparare, meaning to pair up, from par, meaning equal. It is the same root as the word pair."},
+  {"w": "evidence","d": "facts or signs that show something is true","s": "The muddy footprints were evidence that the dog had come inside.","o": "Evidence comes from the Latin word videre, meaning to see. Evidence is something you can see for yourself. Videre is also where we get the word video!","g": ["facts"]},
+  {"w": "summarize","d": "to tell the main points in a short way","s": "Summarize the chapter in three sentences.","o": "Summarize comes from the Latin word summa, meaning the top or the total. A summary gives you the sum of the whole story."},
+  {"w": "sequence","d": "the order in which things happen","s": "Put the pictures in the right sequence.","o": "Sequence comes from the Latin word sequi, meaning to follow. In a sequence, each step follows the one before it."},
+  {"w": "contrast","d": "a clear difference between two things","s": "There is a big contrast between the hot desert and the snowy mountains.","o": "Contrast comes from Latin contra, meaning against, and stare, meaning to stand. Things in contrast stand against each other.","g": ["differ"]},
+  {"w": "infer","d": "to figure something out from clues","s": "From her big smile, I can infer that she liked the gift.","o": "Infer comes from the Latin word inferre, meaning to bring in. When you infer, you bring in clues to reach an idea.","g": ["figure"]},
+  {"w": "conclude","d": "to decide something after thinking it through","s": "After the experiment, we can conclude that plants need light.","o": "Conclude comes from the Latin word concludere, meaning to shut tight, from claudere, meaning to close. A conclusion closes the case!","g": ["figure"]},
+  {"w": "identify","d": "to recognize something and say what it is","s": "Can you identify the bird by its song?","o": "Identify comes from the Latin word idem, meaning the same. When you identify something, you match it to the same thing you already know."},
+  {"w": "analyze","d": "to study something closely by looking at its parts","s": "Scientists analyze rocks to learn how old they are.","o": "Analyze comes from the Greek word analusis, meaning a loosening up. To analyze is to loosen something into its parts so you can study each one."},
+  {"w": "significant","d": "important enough to really matter","s": "Winning the science fair was a significant moment for her.","o": "Significant comes from the Latin word significare, meaning to show by a sign. Something significant is a sign that matters.","g": ["important"]},
+  {"w": "obvious","d": "easy to see or understand","s": "It was obvious that the cat had knocked over the vase.","o": "Obvious comes from the Latin word obvius, meaning in the way, from ob, in front of, and via, road. Something obvious is right there in your path!","g": ["clear"]},
+  {"w": "accurate","d": "exactly correct, with no mistakes","s": "Her measurements were accurate to the millimeter.","o": "Accurate comes from the Latin word accuratus, meaning done with care, from cura, meaning care. Cura is also the root of the word cure."},
+  {"w": "hypothesis","d": "an idea you can test to see if it is true","s": "Our hypothesis was that warm water would melt the ice faster.","o": "Hypothesis comes from two Greek words: hypo, meaning under, and thesis, meaning a placing. A hypothesis is the idea placed underneath an experiment, as its starting point.","g": ["idea"]},
+  {"w": "investigate","d": "to look into something carefully to find the truth","s": "The detectives will investigate what happened to the missing painting.","o": "Investigate comes from the Latin word vestigium, meaning a footprint or a track. To investigate is to follow the tracks!"},
+  {"w": "interpret","d": "to explain or figure out the meaning of something","s": "We had to interpret what the poem was really about.","o": "Interpret comes from the Latin word interpres, meaning a go-between or a translator. An interpreter stands between two sides and explains the meaning.","g": ["figure"]},
+  {"w": "emphasize","d": "to give something extra attention or importance","s": "The coach emphasized teamwork before the big game.","o": "Emphasize comes from the Greek word emphasis, meaning a showing or a display. When you emphasize something, you put it on display."},
+  {"w": "evaluate","d": "to judge how good or useful something is","s": "Evaluate each website before you use it for your report.","o": "Evaluate comes from the Latin word valere, meaning to be strong or to be worth something. It is the same root as the word value."},
+  {"w": "perspective","d": "a point of view; the way someone sees things","s": "The story is told from the dog's perspective.","o": "Perspective comes from the Latin word perspicere, meaning to look through, from specere, meaning to look. Specere is also the root of spectacles, another word for glasses!"},
+  {"w": "consequence","d": "something that happens as a result of an action","s": "One consequence of missing the bus was being late to school.","o": "Consequence comes from the Latin word consequi, meaning to follow closely. A consequence follows right behind an action."},
+  {"w": "relevant","d": "connected to the topic being discussed","s": "Only include facts that are relevant to your question.","o": "Relevant comes from the Latin word relevare, meaning to raise up or to lighten."},
+  {"w": "strategy","d": "a plan for reaching a goal","s": "Her strategy was to answer the easy questions first.","o": "Strategy comes from the Greek word strategos, meaning an army general. Strategy was first the skill of leading an army to victory.","g": ["way"]},
+  {"w": "survive","d": "to stay alive or keep going through something hard","s": "Camels can survive for days without water.","o": "Survive comes from Latin super, meaning beyond, and vivere, meaning to live. To survive is to live beyond danger."},
+  {"w": "transform","d": "to change completely in form or appearance","s": "A caterpillar will transform into a butterfly.","o": "Transform comes from Latin trans, meaning across, and forma, meaning shape. To transform is to move across into a brand new shape.","g": ["change"]},
+  {"w": "adapt","d": "to change in order to fit a new situation","s": "Polar bears adapt to the cold with thick fur and fat.","o": "Adapt comes from Latin ad, meaning to, and aptare, meaning to fit. To adapt is to make yourself fit. It shares a root with the word apt.","g": ["change"]},
+  {"w": "benefit","d": "something good that helps you","s": "One benefit of reading is learning new words.","o": "Benefit comes from Latin bene, meaning well, and facere, meaning to do. A benefit is something done well for you."},
+  {"w": "contribute","d": "to give or add something to help a group","s": "Everyone can contribute an idea to the class project.","o": "Contribute comes from the Latin word contribuere, meaning to bring together or to add."},
+  {"w": "crucial","d": "extremely important","s": "Water is crucial for all living things.","o": "Crucial comes from the Latin word crux, meaning a cross. Think of a crossroads, where choosing the right way really matters.","g": ["important"]},
+  {"w": "data","d": "facts or numbers collected to study something","s": "We recorded the temperature data every hour.","o": "Data comes from the Latin word datum, meaning something given. Data are the facts given to you to study.","g": ["facts"]},
+  {"w": "emerge","d": "to come out or appear","s": "The chick began to emerge from its egg.","o": "Emerge comes from Latin e, meaning out, and mergere, meaning to dip. To emerge is to rise up out of the water. It is the same root as submerge."},
+  {"w": "enormous","d": "very, very large","s": "An enormous wave crashed onto the beach.","o": "Enormous comes from the Latin word enormis, from e, meaning out of, and norma, meaning a rule or pattern. Something enormous breaks the normal rules of size!"},
+  {"w": "isolate","d": "to set apart from others","s": "The vet had to isolate the sick puppy so the others would stay healthy.","o": "Isolate comes from the Italian word isolato, meaning made into an island, from the Latin word insula, meaning island."},
+  {"w": "participate","d": "to take part in something","s": "All students can participate in the talent show.","o": "Participate comes from Latin pars, meaning part, and capere, meaning to take. To participate is to take a part."},
+  {"w": "process","d": "a series of steps to get something done","s": "Making paper by hand is a long process.","o": "Process comes from the Latin word procedere, meaning to go forward. A process moves forward step by step."},
+  {"w": "role","d": "the part someone plays","s": "She had the lead role in the school play.","o": "Role comes from the French word role, meaning a roll of paper. Long ago, an actor's lines were written on a rolled-up piece of paper!"},
+  {"w": "specific","d": "exact and particular, not general","s": "Give a specific example from the text.","o": "Specific comes from the Latin word species, meaning a kind or a type. It is the same root as the word species, used for kinds of animals and plants."},
+  {"w": "technique","d": "a special way of doing something with skill","s": "The artist used a new technique to paint the sky.","o": "Technique comes from the Greek word tekhne, meaning art or skill. Tekhne is also the root of technology.","g": ["way"]},
+  {"w": "theory","d": "an explanation based on ideas and evidence","s": "Scientists tested the theory with many experiments.","o": "Theory comes from the Greek word theoria, meaning a looking at or a viewing. A theory is a way of looking at how the world works.","g": ["idea"]},
+  {"w": "valid","d": "based on good reasons and fair to accept","s": "Being sick is a valid reason to miss practice.","o": "Valid comes from the Latin word validus, meaning strong. A valid reason is a strong one."},
+  {"w": "cite","d": "to name a source as proof for what you say","s": "Cite the page where you found the answer.","o": "Cite comes from the Latin word citare, meaning to call or to summon. When you cite a source, you call it in to back you up."},
+  {"w": "explicit","d": "stated clearly so there is no doubt","s": "The directions were explicit: no phones during the test.","o": "Explicit comes from the Latin word explicitus, meaning unfolded. Something explicit is laid out flat for everyone to see.","g": ["clear"]},
+  {"w": "coherent","d": "logical and easy to follow","s": "Her essay was coherent from beginning to end.","o": "Coherent comes from the Latin word cohaerere, meaning to stick together. The ideas in a coherent essay stick together. Haerere is also the root of adhesive, a word for glue.","g": ["clear"]},
+  {"w": "debate","d": "a discussion where people argue different sides","s": "Our class held a debate about school uniforms.","o": "Debate comes from the old French word debatre, meaning to fight, from battre, meaning to beat. It is the same root as the word battle."},
+  {"w": "candidate","d": "a person trying to win a job or an election","s": "Each candidate gave a speech to the class.","o": "Candidate comes from the Latin word candidatus, meaning dressed in white. In ancient Rome, people running for office wore bright white togas!"},
+  {"w": "disaster","d": "a sudden event that causes great damage","s": "The flood was a disaster for the small town.","o": "Disaster comes from the Italian word disastro, from dis, meaning bad, and astro, meaning star. Long ago, people blamed terrible events on unlucky stars."},
+  {"w": "maintain","d": "to keep something in good shape or keep it going","s": "It takes work to maintain a garden.","o": "Maintain comes from the Latin words manu tenere, meaning to hold in the hand."},
+  {"w": "obtain","d": "to get something, usually with some effort","s": "You must obtain permission before the field trip.","o": "Obtain comes from the Latin word obtinere, meaning to hold on to."},
+  {"w": "principle","d": "a basic rule or belief","s": "Honesty is an important principle in our family.","o": "Principle comes from the Latin word principium, meaning a beginning, from princeps, meaning first. A principle is a first, basic truth."},
+  {"w": "require","d": "to need something","s": "Plants require sunlight to grow.","o": "Require comes from the Latin word requirere, meaning to seek again or to ask for."},
+  {"w": "source","d": "the place where something comes from","s": "The library is a great source of information.","o": "Source comes from the old French word sourse, meaning a spring of water, from the Latin word surgere, meaning to rise. Information flows from a source like water from a spring."},
+  {"w": "structure","d": "the way the parts of something are put together","s": "The structure of a bridge must be very strong.","o": "Structure comes from the Latin word struere, meaning to build. It is the same root as construct."},
+  {"w": "environment","d": "the surroundings where someone or something lives","s": "Frogs need a wet environment to survive.","o": "Environment comes from the French word environ, meaning around. Your environment is everything around you."},
+  {"w": "factor","d": "one of the things that helps cause a result","s": "Rain was a big factor in the team's loss.","o": "Factor comes from the Latin word factor, meaning a maker or doer, from facere, meaning to make. A factor helps make something happen."},
+  {"w": "function","d": "the job or purpose that something has","s": "The function of the heart is to pump blood.","o": "Function comes from the Latin word functio, meaning a performance, from fungi, meaning to perform."},
+  {"w": "indicate","d": "to point out or show","s": "The arrows indicate which way to go.","o": "Indicate comes from the Latin word indicare, meaning to point out. It is related to index, the Latin name for the pointing finger."},
+  {"w": "assume","d": "to believe something is true without proof","s": "Don't assume the answer is right without checking it.","o": "Assume comes from the Latin word assumere, meaning to take up, from ad and sumere, meaning to take."},
+  {"w": "approach","d": "a way of dealing with a problem or task","s": "Try a different approach to the puzzle.","o": "Approach comes from the Latin word appropiare, meaning to come nearer, from prope, meaning near.","g": ["way"]},
+  {"w": "distinct","d": "clearly different and easy to tell apart","s": "Each bird has a distinct call.","o": "Distinct comes from the Latin word distinguere, meaning to separate. It is the same root as distinguish.","g": ["differ"]},
+  {"w": "establish","d": "to set up or start something that will last","s": "The town was established more than one hundred years ago.","o": "Establish comes from the Latin word stabilire, meaning to make stable."},
+  {"w": "vary","d": "to be different from one another","s": "Snowflakes vary in shape and size.","o": "Vary comes from the Latin word variare, meaning to change. It is the same root as variety.","g": ["change","differ"]},
+  {"w": "complex","d": "having many connected parts; complicated","s": "The human brain is very complex.","o": "Complex comes from the Latin word complexus, meaning woven together, from plectere, meaning to braid."},
+  {"w": "minimum","d": "the smallest amount that is allowed or possible","s": "You need a minimum of three sources for the report.","o": "Minimum comes from the Latin word minimus, meaning the smallest. It shares its root with the word minor."},
+  {"w": "objective","d": "a goal you are working toward","s": "Our objective is to finish the model by Friday.","o": "Objective comes from the Latin word objectum, meaning something put in front. An objective is set in front of you to aim at."},
+  {"w": "respond","d": "to answer or react to something","s": "Please respond to the invitation by Monday.","o": "Respond comes from the Latin word respondere, meaning to promise in return."},
+  {"w": "resource","d": "something useful you can draw on when needed","s": "Fresh water is a precious natural resource.","o": "Resource comes from the old French word resourdre, meaning to rise again. A resource is help that rises up when you need it."}];
+var VOCAB_WORDS = VOCAB.map(function(v){ return v.w; });
 
-function poolSize(lvl){ return Math.min(9 + lvl, 100); }
+
+/* ---------- State ---------- */
+var PROFILES = {
+  henry: { key:"wordfrenzy_v1", mode:"sight", name:"Henry" },
+  poppy: { key:"wordfrenzy_poppy", mode:"vocab", name:"Poppy" }
+};
+var ACTIVE_KEY = "wordfrenzy_active";
+var memStore = {};
+function readKey(k){
+  try{ var s = localStorage.getItem(k); if(s) return JSON.parse(s); }catch(e){}
+  return memStore[k] || null;
+}
+function writeKey(k, v){
+  memStore[k] = v;
+  try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){}
+}
+var activeProfile = "henry";
+try{ var savedActive = localStorage.getItem(ACTIVE_KEY); if(savedActive && PROFILES[savedActive]) activeProfile = savedActive; }catch(e){}
+function loadProfile(p){
+  var s = readKey(PROFILES[p].key) || { level:1, miss:{}, secs:10, showHeard:true, name:PROFILES[p].name };
+  if(!s.miss) s.miss = {};
+  if(!s.secs) s.secs = 10;
+  if(s.showHeard === undefined) s.showHeard = true;
+  if(s.name === undefined) s.name = PROFILES[p].name;
+  if(!s.jokeIds) s.jokeIds = [];
+  if(s.voiceName === undefined) s.voiceName = "";
+  if(!s.streak) s.streak = {};
+  if(!s.newWords) s.newWords = [];
+  if(!s.stuck) s.stuck = {};
+  if(!s.seen) s.seen = {};
+  if(!s.originIds) s.originIds = [];
+  return s;
+}
+function saveState(){ writeKey(PROFILES[activeProfile].key, state); }
+var state = loadProfile(activeProfile);
+function isVocab(){ return PROFILES[activeProfile].mode === "vocab"; }
+function LIST(){ return isVocab() ? VOCAB_WORDS : FRY; }
+function deckSize(){ return isVocab() ? 10 : 20; }
+function poolBase(){ return isVocab() ? 4 : 9; }
+function maxLevel(){ return LIST().length - poolBase(); }
+function poolSize(lvl){ return Math.min(poolBase() + lvl, LIST().length); }
 function displayWord(w){ return w === "i" ? "I" : w; }
 
 /* ---------- Matching ---------- */
@@ -421,6 +528,7 @@ function acceptSet(target){
   return s;
 }
 function matches(target, transcript){
+  if(isVocab()) return vocabMatch(target, transcript);
   var acc = acceptSet(target);
   var clean = transcript.toLowerCase().replace(/'/g,"").replace(/[^a-z0-9\s]/g," ").trim();
   if(!clean) return false;
@@ -466,7 +574,7 @@ function weightedSampleDistinct(arr, n){
 }
 function buildDeck(){
   var P = poolSize(state.level);
-  var pool = FRY.slice(0, P);
+  var pool = LIST().slice(0, P), DECK = deckSize(), vocab = isVocab();
   var streak = state.streak || {}, miss = state.miss || {};
   var newW = [];
   var nwSrc = state.newWords || [];
@@ -482,20 +590,20 @@ function buildDeck(){
   }
   var deckArr = [];
   for(k = 0; k < newW.length; k++){ deckArr.push(newW[k]); deckArr.push(newW[k]); }
-  var slotsLeft = 20 - deckArr.length;
+  var slotsLeft = DECK - deckArr.length;
   roundStuck = [];
-  var sBudget = Math.min(STRUGGLE_DECK_MAX, slotsLeft);
+  var sBudget = Math.min(vocab ? 3 : STRUGGLE_DECK_MAX, slotsLeft);
   var sPool = struggle.slice();
   while(sBudget > 0 && sPool.length){
     var pw = weightedSampleDistinct(sPool, 1)[0];
     sPool.splice(sPool.indexOf(pw), 1);
     deckArr.push(pw); sBudget -= 1;
-    if(isStuck(pw) && roundStuck.length < 2) roundStuck.push(pw);
+    if(!vocab && isStuck(pw) && roundStuck.length < 2) roundStuck.push(pw);
   }
-  slotsLeft = 20 - deckArr.length;
-  var confCount = Math.min(CONF_MIN, confident.length, slotsLeft);
+  slotsLeft = DECK - deckArr.length;
+  var confCount = Math.min(vocab ? 3 : CONF_MIN, confident.length, slotsLeft);
   deckArr = deckArr.concat(weightedSampleDistinct(confident, confCount));
-  slotsLeft = 20 - deckArr.length;
+  slotsLeft = DECK - deckArr.length;
   if(rest.length >= slotsLeft){
     deckArr = deckArr.concat(weightedSampleDistinct(rest, slotsLeft));
   } else {
@@ -512,7 +620,7 @@ function buildDeck(){
     var ri = 0;
     while(slotsLeft-- > 0){ deckArr.push(rp[ri % rp.length]); ri++; }
   }
-  deckArr = deckArr.slice(0, 20);
+  deckArr = deckArr.slice(0, DECK);
   var tries = 0;
   do { shuffle(deckArr); tries++; } while (hasAdjacentDupe(deckArr) && tries < 40);
   for(k = 1; k < deckArr.length; k++){
@@ -766,6 +874,276 @@ function findPartner(w){
   return pick.length ? pick[Math.floor(Math.random() * pick.length)] : null;
 }
 
+/* ---------- Vocabulary mode (Poppy) ---------- */
+var VMAP = {}; VOCAB.forEach(function(v){ VMAP[v.w] = v; });
+var vPhase = null, introMode = false, introQueue = [], roundIntro = [], vChoiceLock = false, vPronMiss = false, lastOrigin = null, introSeq = 0;
+function normV(t){ return t.replace(/ise$/, "ize").replace(/yse$/, "yze").replace(/ised$/, "ized").replace(/ysed$/, "yzed"); }
+function vocabMatch(target, transcript){
+  var clean = transcript.toLowerCase().replace(/'/g, "").replace(/[^a-z\s]/g, " ").trim();
+  if(!clean) return false;
+  var toks = clean.split(/\s+/);
+  if(toks.length > 1) toks.push(toks.join(""));
+  var tg = normV(target);
+  var tol = tg.length >= 9 ? 2 : (tg.length >= 5 ? 1 : 0);
+  var stem = tg.length > 4 ? tg.slice(0, tg.length - 1) : tg;
+  for(var k = 0; k < toks.length; k++){
+    var t = normV(toks[k]);
+    if(t === tg) return true;
+    if(tol && Math.abs(t.length - tg.length) <= tol && lev(t, tg) <= tol) return true;
+    if(t.length > tg.length && t.length - tg.length <= 3 && t.indexOf(stem) === 0) return true;
+  }
+  return false;
+}
+function setWordVocab(w, size){
+  wordEl.className = "word vw" + (w.length > 9 ? " long" : "") + (size ? " " + size : "");
+  wordEl.textContent = w;
+}
+function setVbox(d, s){
+  var dEl = $("vdef"), sEl = $("vsent");
+  dEl.textContent = d || ""; dEl.style.display = d ? "" : "none";
+  sEl.textContent = s || ""; sEl.style.display = s ? "" : "none";
+}
+function pickDistractors(w, n){
+  var v = VMAP[w], groups = v.g || [], P = poolSize(state.level), near = [], far = [];
+  VOCAB.forEach(function(x, i){
+    if(x.w === w) return;
+    var g = x.g || [];
+    for(var a = 0; a < g.length; a++) if(groups.indexOf(g[a]) > -1) return;
+    (i < P + 6 ? near : far).push(x.d);
+  });
+  shuffle(near); shuffle(far);
+  return near.concat(far).slice(0, n);
+}
+/* New words: a teaching card before the round */
+function startIntro(){
+  roundIntro = [];
+  var have = {};
+  for(var k = 0; k < deck.length; k++){
+    var w = deck[k];
+    if(!state.seen[w] && !have[w]){ have[w] = 1; roundIntro.push(w); }
+  }
+  introQueue = roundIntro.slice();
+  if(!introQueue.length){ nextCard(); return; }
+  introMode = true;
+  chipLeft.textContent = "New words";
+  nextIntro();
+}
+function nextIntro(){
+  if(!introQueue.length){
+    introMode = false;
+    scrGame.classList.remove("tapmode");
+    sayBanner.classList.remove("on");
+    var g0 = jokeGen;
+    speak("Now let's play!", 1).then(function(){ if(g0 === jokeGen) nextCard(); });
+    return;
+  }
+  var w = introQueue.shift(), v = VMAP[w], g = jokeGen;
+  currentWord = w;
+  scrGame.classList.add("tapmode");
+  cardEl.className = "card intro enter";
+  setWordVocab(w);
+  setVbox(v.d, v.s);
+  var box = $("choices");
+  box.innerHTML = "";
+  var b = document.createElement("button");
+  b.className = "btn small";
+  b.textContent = "Got it!";
+  b.onclick = function(){
+    if(g !== jokeGen || !introMode || currentWord !== w) return;
+    ensureAudio();
+    state.seen[w] = 1; saveState();
+    nextIntro();
+  };
+  box.appendChild(b);
+  sayBanner.textContent = "New word!";
+  sayBanner.classList.add("on");
+  speakIntro(w);
+}
+function speakIntro(w){
+  var v = VMAP[w], seq = ++introSeq, g = jokeGen;
+  var ok = function(){ return seq === introSeq && g === jokeGen; };
+  speakWord(w, 0.85).then(function(){ return wait(300); }).then(function(){
+    if(!ok()) return;
+    return speak(w + " means " + v.d + ".", 0.92);
+  }).then(function(){ return wait(300); }).then(function(){
+    if(!ok()) return;
+    return speak(v.s, 0.95);
+  });
+}
+/* Step 1: say the word */
+function showVocabSay(w){
+  vPhase = "say";
+  vPronMiss = false;
+  scrGame.classList.remove("tapmode");
+  cardEl.className = "card enter";
+  setWordVocab(w);
+  setVbox(null, null);
+  $("choices").innerHTML = "";
+  heardEl.textContent = "";
+  sayBanner.textContent = "Say it!";
+  sayBanner.classList.add("on");
+  updateHud();
+  startTimer();
+  startListen();
+}
+function vocabSaid(ok, viaHelp){
+  if(vPhase !== "say" || !cardLive) return;
+  var g = jokeGen, w = currentWord;
+  cardLive = false;
+  stopListen(); clearTimer();
+  if(ok){
+    sayBanner.classList.remove("on");
+    sfx.good();
+    cardEl.className = "card good";
+    wait(600).then(function(){ if(g === jokeGen) vocabChoose(w); });
+    return;
+  }
+  vPronMiss = true;
+  runFails++;
+  sayBanner.textContent = "Listen...";
+  sayBanner.classList.add("on");
+  if(!viaHelp) sfx.bad();
+  wait(300).then(function(){
+    if(g !== jokeGen) return;
+    return speakWord(w, 0.75);
+  }).then(function(){ return wait(1200); }).then(function(){
+    if(g !== jokeGen) return;
+    return speakWord(w, 0.9);
+  }).then(function(){ return wait(400); }).then(function(){
+    if(g === jokeGen) vocabChoose(w);
+  });
+}
+/* Step 2: pick the meaning */
+function vocabChoose(w){
+  var g = jokeGen, v = VMAP[w];
+  vPhase = "choose";
+  vChoiceLock = false;
+  scrGame.classList.add("tapmode");
+  cardEl.className = "card vchoose";
+  setWordVocab(w, "sm");
+  setVbox(null, v.s);
+  var opts = shuffle([v.d].concat(pickDistractors(w, 3)));
+  var box = $("choices");
+  box.innerHTML = "";
+  opts.forEach(function(d){
+    var b = document.createElement("button");
+    b.className = "choice def";
+    b.textContent = d;
+    b.onclick = function(){ pickDef(b, d === v.d, w, g); };
+    box.appendChild(b);
+  });
+  sayBanner.textContent = "What does it mean?";
+  sayBanner.classList.add("on");
+  updateHud();
+}
+function pickDef(btn, right, w, g){
+  if(vChoiceLock || g !== jokeGen || vPhase !== "choose") return;
+  vChoiceLock = true;
+  ensureAudio();
+  var v = VMAP[w];
+  if(right){
+    btn.classList.add("right");
+    sfx.good();
+    cleared++;
+    vPhase = null;
+    updateHud();
+    setTimeout(function(){ if(g === jokeGen) nextCard(); }, 900);
+    return;
+  }
+  btn.classList.add("wrong");
+  var btns = $("choices").querySelectorAll(".choice");
+  for(var k = 0; k < btns.length; k++) if(btns[k].textContent === v.d) btns[k].classList.add("right");
+  runFails++;
+  state.miss[w] = (state.miss[w] || 0) + 1;
+  runMissed[w] = true;
+  saveState();
+  sayBanner.textContent = "Here's what it means...";
+  speak(w + " means " + v.d + ".", 0.9).then(function(){ return wait(400); }).then(function(){
+    if(g !== jokeGen) return;
+    return speak(v.s, 0.95);
+  }).then(function(){ return wait(500); }).then(function(){
+    if(g !== jokeGen) return;
+    vPhase = null;
+    requeue(w);
+    nextCard();
+  });
+}
+function vocabHelp(){
+  if(introMode){ if(currentWord) speakIntro(currentWord); return; }
+  if(vPhase === "say" && cardLive){ vocabSaid(false, true); return; }
+  if(vPhase === "choose"){
+    var btns = $("choices").querySelectorAll(".choice"), parts = [];
+    for(var k = 0; k < btns.length; k++) parts.push(btns[k].textContent);
+    speak(parts.join(". Or, ") + ".", 0.95);
+  }
+}
+/* Reward: a word origin story */
+function pickOrigin(){
+  var ids = state.originIds || [], k;
+  var fresh = roundIntro.filter(function(w){ return VMAP[w] && ids.indexOf(w) < 0; });
+  var w = fresh[0];
+  if(!w){
+    var played = Object.keys(runSeen).filter(function(x){ return VMAP[x] && ids.indexOf(x) < 0; });
+    if(!played.length) played = Object.keys(runSeen).filter(function(x){ return VMAP[x]; });
+    if(!played.length) played = [VOCAB[0].w];
+    w = played[Math.floor(Math.random() * played.length)];
+  }
+  ids.push(w);
+  if(ids.length > 30) ids = ids.slice(-30);
+  state.originIds = ids;
+  saveState();
+  return w;
+}
+function tellOrigin(w, withIntro){
+  var gen = jokeGen, v = VMAP[w];
+  var card = $("jokeCard");
+  card.classList.add("origin");
+  $("jokeLabel").innerHTML = "&#128220; WORD ORIGIN";
+  card.style.display = "";
+  $("jokeSetup").textContent = "Where does “" + w + "” come from?";
+  var pEl = $("jokePunch");
+  pEl.textContent = v.o;
+  if(withIntro) pEl.classList.remove("show");
+  var start = withIntro ? speak("Word story time!", 1).then(function(){ return wait(500); }) : Promise.resolve();
+  start.then(function(){
+    if(gen !== jokeGen) return;
+    return speak("Where does the word " + w + " come from?", 0.95);
+  }).then(function(){
+    if(gen !== jokeGen) return;
+    return wait(1200);
+  }).then(function(){
+    if(gen !== jokeGen) return;
+    pEl.classList.add("show");
+    return speak(v.o, 0.95);
+  }).then(function(){
+    if(gen !== jokeGen) return;
+    ensureAudio(); tone(784, 0.18, 0, "triangle", 0.12); tone(1046, 0.25, 0.14, "triangle", 0.12);
+    if(withIntro) jokeCTA(gen);
+  });
+}
+/* Player picker */
+function profileName(p){
+  if(p === activeProfile) return (state.name || "").trim() || PROFILES[p].name;
+  var s = readKey(PROFILES[p].key);
+  return (s && (s.name || "").trim()) || PROFILES[p].name;
+}
+function refreshPicker(){
+  ["henry", "poppy"].forEach(function(p){
+    var b = $(p === "henry" ? "pickHenry" : "pickPoppy");
+    b.textContent = profileName(p);
+    b.classList.toggle("sel", p === activeProfile);
+  });
+  $("tagLine").textContent = isVocab() ? "Say the word, then pick what it means!" : "Say the word before the timer runs out!";
+}
+function selectProfile(p){
+  if(!PROFILES[p] || p === activeProfile) return;
+  activeProfile = p;
+  try{ localStorage.setItem(ACTIVE_KEY, p); }catch(e){}
+  state = loadProfile(p);
+  voiceCache = null;
+  refreshLevelLabels();
+}
+
 /* ---------- Recognition ---------- */
 var SRCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
 var rec = null, wantListen = false, restartTO = null, asrNetFails = 0, restartsThisCard = 0;
@@ -790,7 +1168,7 @@ function initRec(){
       for(var j = 0; j < res.length; j++){
         var txt = res[j].transcript || "";
         if(j === 0) latest = txt;
-        if(matches(currentWord, txt)){ showHeard(txt); if(warmMode) warmSuccess(); else if(remedyMode) remedySuccess(); else resolveSuccess(); return; }
+        if(matches(currentWord, txt)){ showHeard(txt); if(warmMode) warmSuccess(); else if(remedyMode) remedySuccess(); else if(vPhase === "say") vocabSaid(true, false); else resolveSuccess(); return; }
       }
     }
     if(latest) showHeard(latest);
@@ -839,7 +1217,7 @@ function startTimer(){
     if(!timerRunning) return;
     cardMs -= 100;
     updateTimerBar();
-    if(cardMs <= 0){ clearInterval(timerInt); resolveFail(); }
+    if(cardMs <= 0){ clearInterval(timerInt); if(vPhase === "say") vocabSaid(false, false); else resolveFail(); }
   }, 100);
 }
 function updateTimerBar(){
@@ -857,7 +1235,7 @@ var remedyMode = false, remedyTO = null;
 
 function updateHud(){
   chipLevel.textContent = "Lv " + state.level;
-  var left = deck.length + (cardLive ? 1 : 0);
+  var left = deck.length + (cardLive || vPhase ? 1 : 0);
   chipLeft.textContent = left + " left";
   var total = cleared + left;
   pfill.style.width = (total ? (cleared / total) * 100 : 0) + "%";
@@ -868,11 +1246,13 @@ function startGame(){
   $("jokeCard").style.display = "none";
   $("jokePunch").classList.remove("show");
   $("btnAgain").classList.remove("pulse");
-  primeJoke();
+  if(!isVocab()) primeJoke();
+  vPhase = null; introMode = false;
   deck = buildDeck();
   cleared = 0; runFails = 0; runMissed = {}; runSeen = {}; runFailCount = {};
   asrNetFails = 0;
   showScreen(scrGame);
+  if(isVocab()){ startIntro(); return; }
   if(roundStuck.length) startWarmup(); else nextCard();
 }
 function nextCard(){
@@ -883,6 +1263,7 @@ function nextCard(){
   cardLive = true;
   restartsThisCard = 0;
   runSeen[currentWord] = true;
+  if(isVocab()){ showVocabSay(currentWord); return; }
   cardEl.className = "card enter";
   setWordPlain(currentWord);
   heardEl.textContent = "";
@@ -1126,7 +1507,7 @@ function finishRun(){
   clearTimer(); stopListen();
   var missedList = [];
   for(var w in runMissed) missedList.push(displayWord(w));
-  var starCount = runFails === 0 ? 3 : (runFails <= 3 ? 2 : 1);
+  var starCount = runFails === 0 ? 3 : (runFails <= (isVocab() ? 2 : 3) ? 2 : 1);
   var kidName = (state.name || "").trim() || "champ";
 
   var starsEl = $("stars");
@@ -1144,7 +1525,7 @@ function finishRun(){
   dl.className = "doneline";
   void dl.offsetWidth;
   dl.className = "doneline cheer";
-  $("doneSub").textContent = starCount === 3 ? "All 20 cards on the first try!" : (missedList.length ? "Tricky words this round: " + missedList.slice(0, 6).join(", ") : "");
+  $("doneSub").textContent = starCount === 3 ? "All " + deckSize() + " cards on the first try!" : (missedList.length ? "Tricky words this round: " + missedList.slice(0, 6).join(", ") : "");
 
   var halved = {};
   for(var m in state.miss){ var h = Math.floor(state.miss[m] / 2); if(h > 0) halved[m] = h; }
@@ -1173,13 +1554,14 @@ function finishRun(){
 
   var before = poolSize(state.level);
   var struggling = 0;
-  for(var sk = 0; sk < before; sk++) if((state.miss[FRY[sk]] || 0) > 0) struggling++;
+  for(var sk = 0; sk < before; sk++) if((state.miss[LIST()[sk]] || 0) > 0) struggling++;
   var allow = struggling >= STRUGGLE_HARD ? 0 : (struggling >= STRUGGLE_SOFT ? 1 : starCount);
-  var add = Math.min(allow, 100 - before);
+  if(isVocab()) allow = Math.min(allow, 2);
+  var add = Math.min(allow, LIST().length - before);
   var newWordsArr = [];
   if(add > 0){
     state.level += add;
-    for(var nk = before; nk < before + add; nk++) newWordsArr.push(FRY[nk]);
+    for(var nk = before; nk < before + add; nk++) newWordsArr.push(LIST()[nk]);
   }
   state.newWords = newWordsArr;
   saveState();
@@ -1195,7 +1577,7 @@ function finishRun(){
   } else {
     nc.style.display = "none";
     var ds = $("doneSub");
-    var extra = before >= 100 ? "All 100 words are in play!" : "Practice round next: time to master the tricky ones!";
+    var extra = before >= LIST().length ? "All " + LIST().length + " words are in play!" : "Practice round next: time to master the tricky ones!";
     ds.textContent = (ds.textContent ? ds.textContent + " " : "") + extra;
   }
   $("nextLevel").textContent = "Level " + state.level + " is ready";
@@ -1222,6 +1604,7 @@ function finishRun(){
       return wait(500);
     }).then(function(){
       if(gen !== jokeGen) return;
+      if(isVocab()){ lastOrigin = pickOrigin(); tellOrigin(lastOrigin, true); return; }
       lastJoke = jokeReady || fallbackJoke();
       jokeReady = null;
       rememberJoke(lastJoke);
@@ -1310,12 +1693,14 @@ function jokeCTA(gen){
   wait(1000).then(function(){
     if(gen !== jokeGen) return;
     $("btnAgain").classList.add("pulse");
-    speak("Do another round and I'll tell you another joke.", 1);
+    speak(isVocab() ? "Do another round and I'll tell you another word story." : "Do another round and I'll tell you another joke.", 1);
   });
 }
 function tellJoke(joke, withIntro){
   var gen = jokeGen;
   var parts = splitJoke(joke.text);
+  $("jokeCard").classList.remove("origin");
+  $("jokeLabel").innerHTML = "&#129345; JOKE TIME";
   $("jokeCard").style.display = "";
   $("jokeSetup").textContent = parts[0];
   var pEl = $("jokePunch");
@@ -1370,11 +1755,13 @@ function refreshLevelLabels(){
   var P = poolSize(state.level);
   $("titleLevel").innerHTML = "Level " + state.level + " &bull; " + P + " words";
   $("lvlVal").value = state.level;
+  $("lvlVal").max = maxLevel();
   $("lvlNote").innerHTML = "Level " + state.level + " &bull; " + P + " words in play. Level changes apply to the next round.";
   $("secVal").textContent = state.secs + "s";
   $("nameVal").value = state.name;
   $("swHeard").classList.toggle("onn", state.showHeard);
   chipLevel.textContent = "Lv " + state.level;
+  refreshPicker();
 }
 function openSettings(){ refreshLevelLabels(); fillVoices(); overlay.classList.add("on"); if(cardLive){ pauseTimer(); stopListen(); } }
 function closeSettings(){
@@ -1392,7 +1779,7 @@ $("secPlus").onclick = function(){ state.secs = Math.min(20, state.secs + 1); re
 function setLevel(n){
   n = Math.round(Number(n));
   if(!isFinite(n)) n = state.level;
-  state.level = Math.min(91, Math.max(1, n));
+  state.level = Math.min(maxLevel(), Math.max(1, n));
   state.newWords = [];
   refreshLevelLabels();
 }
@@ -1400,7 +1787,7 @@ $("lvlMinus").onclick = function(){ setLevel(state.level - 1); };
 $("lvlPlus").onclick = function(){ setLevel(state.level + 1); };
 $("lvlVal").onchange = function(){ setLevel(this.value); };
 $("swHeard").onclick = function(){ state.showHeard = !state.showHeard; refreshLevelLabels(); };
-$("nameVal").oninput = function(){ state.name = this.value; };
+$("nameVal").oninput = function(){ state.name = this.value; refreshPicker(); };
 $("voiceSel").onchange = function(){
   state.voiceName = this.value;
   voiceCache = null;
@@ -1408,12 +1795,15 @@ $("voiceSel").onchange = function(){
   var n = (state.name || "").trim() || "champ";
   speak("Hi " + n + "! Let's play!", 0.95);
 };
-$("btnJokeAgain").onclick = function(){ ensureAudio(); if(lastJoke) tellJoke(lastJoke, false); };
+$("btnJokeAgain").onclick = function(){ ensureAudio(); if(isVocab()){ if(lastOrigin) tellOrigin(lastOrigin, false); } else if(lastJoke) tellJoke(lastJoke, false); };
 function quitToTitle(){
   jokeGen++;
   cardLive = false;
   warmMode = false;
   remedyMode = false;
+  vPhase = null;
+  introMode = false;
+  introSeq++;
   scrGame.classList.remove("tapmode");
   clearTimeout(warmTO);
   clearTimeout(remedyTO);
@@ -1424,18 +1814,19 @@ function quitToTitle(){
   showScreen(scrTitle);
 }
 $("homeGame").onclick = function(){
-  var wasLive = cardLive;
-  if(wasLive){ pauseTimer(); stopListen(); }
+  var wasLive = cardLive || !!vPhase || introMode || warmMode;
+  var micOn = cardLive;
+  if(micOn){ pauseTimer(); stopListen(); }
   if(wasLive && !confirm("Leave this round? This round's progress will not be saved.")){
-    resumeTimer(); startListen();
+    if(micOn){ resumeTimer(); startListen(); }
     return;
   }
   quitToTitle();
 };
 $("homeDone").onclick = quitToTitle;
 $("btnReset").onclick = function(){
-  if(confirm("Reset progress to Level 1?")){
-    state.level = 1; state.miss = {}; state.streak = {}; state.newWords = []; state.stuck = {};
+  if(confirm("Start " + profileName(activeProfile) + " over at Level 1?")){
+    state.level = 1; state.miss = {}; state.streak = {}; state.newWords = []; state.stuck = {}; state.seen = {}; state.originIds = [];
     saveState(); refreshLevelLabels();
   }
 };
@@ -1443,6 +1834,7 @@ $("btnReset").onclick = function(){
 /* ---------- Help ---------- */
 helpBtn.onclick = function(){
   ensureAudio();
+  if(isVocab()){ vocabHelp(); return; }
   if(warmMode || remedyMode){ if(currentWord) speakWord(currentWord, 0.8); return; }
   if(!cardLive) return;
   resolveFail(true);
@@ -1458,6 +1850,8 @@ $("btnStart").onclick = function(){
   startGame();
 };
 $("btnAgain").onclick = function(){ ensureAudio(); startGame(); };
+$("pickHenry").onclick = function(){ selectProfile("henry"); };
+$("pickPoppy").onclick = function(){ selectProfile("poppy"); };
 $("btnReload").onclick = function(){ location.reload(); };
 
 /* ---------- Visibility ---------- */
