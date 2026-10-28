@@ -306,7 +306,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
       </div>
     </div>
     <div class="row">
-      <label>Level</label>
+      <label id="lvlLabel">Level</label>
       <div class="step">
         <button id="lvlMinus">&minus;</button><input type="number" class="txt lvlnum" id="lvlVal" min="1" max="91" inputmode="numeric"><button id="lvlPlus">+</button>
       </div>
@@ -328,7 +328,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.32 (2026-10-28)";
+var APP_VERSION = "v1.33 (2026-10-28)";
 
 var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 2;
 function isStuck(w){ return (state.stuck ? (state.stuck[w] || 0) : 0) >= STUCK_ROUNDS; }
@@ -568,6 +568,7 @@ function loadProfile(p){
   if(!s.stuck) s.stuck = {};
   if(!s.seen) s.seen = {};
   if(!s.originIds) s.originIds = [];
+  if(!s.known){ s.known = {}; if(PROFILES[p].mode === "vocab") for(var sw in s.streak) if(s.streak[sw] >= 2) s.known[sw] = 1; }
   return s;
 }
 function saveState(){ writeKey(PROFILES[activeProfile].key, state); }
@@ -633,6 +634,7 @@ function weightedSampleDistinct(arr, n){
   return out;
 }
 function buildDeck(){
+  if(isVocab()) return buildVocabDeck();
   var P = poolSize(state.level);
   var pool = LIST().slice(0, P), DECK = deckSize(), vocab = isVocab();
   var streak = state.streak || {}, miss = state.miss || {};
@@ -966,7 +968,7 @@ function setVbox(d, s){
   sEl.textContent = s || ""; sEl.style.display = s ? "" : "none";
 }
 function pickDistractors(w, n){
-  var v = VMAP[w], groups = v.g || [], P = poolSize(state.level), near = [], far = [];
+  var v = VMAP[w], groups = v.g || [], P = vFrontier() + 10, near = [], far = [];
   VOCAB.forEach(function(x, i){
     if(x.w === w) return;
     var g = x.g || [];
@@ -976,7 +978,36 @@ function pickDistractors(w, n){
   shuffle(near); shuffle(far);
   return near.concat(far).slice(0, n);
 }
-/* New words: a teaching card before the round */
+/* Poppy's progress: learned words drop out; each round is 10 different words */
+function knownCount(){ var n = 0; for(var w in state.known) if(state.known[w] && VMAP[w]) n++; return n; }
+function vFrontier(){
+  for(var i = 0; i < VOCAB_WORDS.length; i++){ var w = VOCAB_WORDS[i]; if(!state.seen[w] && !state.known[w]) return i; }
+  return VOCAB_WORDS.length;
+}
+function buildVocabDeck(){
+  var DECK = 10, out, learning = [], known = [], fresh = [];
+  VOCAB_WORDS.forEach(function(w){
+    if(state.known[w]) known.push(w);
+    else if(state.seen[w]) learning.push(w);
+    else fresh.push(w);
+  });
+  out = weightedSampleDistinct(learning, Math.min(4, learning.length));
+  if(known.length >= 5) out = out.concat(weightedSampleDistinct(known, 1));
+  for(var k = 0; k < fresh.length && out.length < DECK; k++) out.push(fresh[k]);
+  var moreL = shuffle(learning.filter(function(w){ return out.indexOf(w) < 0; }));
+  while(out.length < DECK && moreL.length) out.push(moreL.shift());
+  var moreK = shuffle(known.filter(function(w){ return out.indexOf(w) < 0; }));
+  while(out.length < DECK && moreK.length) out.push(moreK.shift());
+  roundStuck = [];
+  return shuffle(out);
+}
+/* Words she has never answered before (used for the word-story reward and for gentler scoring) */
+function markRoundNew(){
+  roundIntro = [];
+  for(var k = 0; k < deck.length; k++) if(!state.seen[deck[k]] && roundIntro.indexOf(deck[k]) < 0) roundIntro.push(deck[k]);
+}
+function isFirstTry(w){ return !state.seen[w]; }
+/* (Legacy) teaching card before the round; no longer used */
 function startIntro(){
   roundIntro = [];
   var have = {};
@@ -1042,7 +1073,7 @@ function showVocabSay(w){
   setVbox(null, null);
   $("choices").innerHTML = "";
   heardEl.textContent = "";
-  sayBanner.textContent = "Say it!";
+  sayBanner.textContent = isFirstTry(w) ? (isExpert(w) ? "New expert word! Say it!" : "New word! Say it!") : "Say it!";
   sayBanner.classList.add("on");
   updateHud();
   startTimer();
@@ -1061,7 +1092,7 @@ function vocabSaid(ok, viaHelp){
     return;
   }
   vPronMiss = true;
-  runFails++;
+  if(!isFirstTry(w)) runFails++;
   sayBanner.textContent = "Listen...";
   sayBanner.classList.add("on");
   if(!viaHelp) sfx.bad();
@@ -1083,7 +1114,7 @@ function vocabChoose(w){
   scrGame.classList.add("tapmode");
   cardEl.className = "card vchoose";
   setWordVocab(w, "sm");
-  setVbox(null, v.s);
+  setVbox(null, null);
   var opts = shuffle([v.d].concat(pickDistractors(w, 3)));
   var box = $("choices");
   box.innerHTML = "";
@@ -1102,33 +1133,42 @@ function pickDef(btn, right, w, g){
   if(vChoiceLock || g !== jokeGen || vPhase !== "choose") return;
   vChoiceLock = true;
   ensureAudio();
-  var v = VMAP[w];
+  var v = VMAP[w], first = isFirstTry(w);
+  state.seen[w] = 1;
+  var finish = function(){
+    if(g !== jokeGen) return;
+    vPhase = null;
+    if(!right) requeue(w);
+    nextCard();
+  };
   if(right){
     btn.classList.add("right");
+    if(first && !vPronMiss) runFirstRight[w] = true;
     sfx.good();
     cleared++;
-    vPhase = null;
     updateHud();
-    setTimeout(function(){ if(g === jokeGen) nextCard(); }, 900);
+    saveState();
+    sayBanner.textContent = "Yes! In a sentence...";
+    setVbox(null, v.s);
+    wait(500).then(function(){
+      if(g !== jokeGen) return;
+      return speak(v.s, 0.95);
+    }).then(function(){ return wait(500); }).then(finish);
     return;
   }
   btn.classList.add("wrong");
   var btns = $("choices").querySelectorAll(".choice");
   for(var k = 0; k < btns.length; k++) if(btns[k].textContent === v.d) btns[k].classList.add("right");
-  runFails++;
+  if(!first) runFails++;
   state.miss[w] = (state.miss[w] || 0) + 1;
   runMissed[w] = true;
   saveState();
   sayBanner.textContent = "Here's what it means...";
+  setVbox(null, v.s);
   speak(w + " means " + v.d + ".", 0.9).then(function(){ return wait(400); }).then(function(){
     if(g !== jokeGen) return;
     return speak(v.s, 0.95);
-  }).then(function(){ return wait(500); }).then(function(){
-    if(g !== jokeGen) return;
-    vPhase = null;
-    requeue(w);
-    nextCard();
-  });
+  }).then(function(){ return wait(500); }).then(finish);
 }
 function vocabHelp(){
   if(introMode){ if(currentWord) speakIntro(currentWord); return; }
@@ -1292,11 +1332,12 @@ function clearTimer(){ clearInterval(timerInt); }
 
 /* ---------- Game flow ---------- */
 var deck = [], currentWord = "", cardLive = false;
-var cleared = 0, runFails = 0, runMissed = {}, runSeen = {}, runFailCount = {};
+var cleared = 0, runFails = 0, runMissed = {}, runSeen = {}, runFailCount = {}, runFirstRight = {};
 var remedyMode = false, remedyTO = null;
 
+function levelChipText(){ return isVocab() ? knownCount() + " learned" : "Lv " + state.level; }
 function updateHud(){
-  chipLevel.textContent = "Lv " + state.level;
+  chipLevel.textContent = levelChipText();
   var left = deck.length + (cardLive || vPhase ? 1 : 0);
   chipLeft.textContent = left + " left";
   var total = cleared + left;
@@ -1311,10 +1352,10 @@ function startGame(){
   if(!isVocab()) primeJoke();
   vPhase = null; introMode = false;
   deck = buildDeck();
-  cleared = 0; runFails = 0; runMissed = {}; runSeen = {}; runFailCount = {};
+  cleared = 0; runFails = 0; runMissed = {}; runSeen = {}; runFailCount = {}; runFirstRight = {};
   asrNetFails = 0;
   showScreen(scrGame);
-  if(isVocab()){ startIntro(); return; }
+  if(isVocab()){ markRoundNew(); nextCard(); return; }
   if(roundStuck.length) startWarmup(); else nextCard();
 }
 function nextCard(){
@@ -1587,7 +1628,7 @@ function finishRun(){
   dl.className = "doneline";
   void dl.offsetWidth;
   dl.className = "doneline cheer";
-  $("doneSub").textContent = starCount === 3 ? "All " + deckSize() + " cards on the first try!" : (missedList.length ? "Tricky words this round: " + missedList.slice(0, 6).join(", ") : "");
+  $("doneSub").textContent = (starCount === 3 && !missedList.length) ? "All " + deckSize() + " cards on the first try!" : (missedList.length ? "Tricky words this round: " + missedList.slice(0, 6).join(", ") : "");
 
   var halved = {};
   for(var m in state.miss){ var h = Math.floor(state.miss[m] / 2); if(h > 0) halved[m] = h; }
@@ -1614,6 +1655,32 @@ function finishRun(){
     ds0.textContent = (ds0.textContent ? ds0.textContent + " " : "") + "Conquered: " + conquered.map(displayWord).join(", ") + "!";
   }
 
+  var newWordsArr = [], learnedArr = [], expertUnlock = false;
+  if(isVocab()){
+    for(var lw in runSeen){
+      if(!runMissed[lw] && (runFirstRight[lw] || (state.streak[lw] || 0) >= 2)){
+        if(!state.known[lw]) learnedArr.push(lw);
+        state.known[lw] = 1;
+      }
+    }
+    for(var mw in runMissed) delete state.known[mw];
+    expertUnlock = roundIntro.indexOf(VOCAB_WORDS[VOCAB_T1]) > -1;
+    state.level = Math.max(1, knownCount());
+    state.newWords = [];
+    saveState();
+    refreshLevelLabels();
+    var ncv = $("newCard");
+    if(learnedArr.length){
+      ncv.style.display = "";
+      $("newLabel").textContent = "LEARNED THIS ROUND";
+      var lwEl = $("newWord");
+      lwEl.textContent = learnedArr.join("   ");
+      lwEl.style.fontSize = learnedArr.length > 2 ? "26px" : "34px";
+    } else {
+      ncv.style.display = "none";
+    }
+    if(knownCount() >= VOCAB_WORDS.length){ var dsa = $("doneSub"); dsa.textContent = (dsa.textContent ? dsa.textContent + " " : "") + "You learned every word!"; }
+  } else {
   var before = poolSize(state.level);
   var struggling = 0;
   for(var sk = 0; sk < before; sk++) if((state.miss[LIST()[sk]] || 0) > 0) struggling++;
@@ -1626,7 +1693,6 @@ function finishRun(){
     for(var nk = before; nk < before + add; nk++) newWordsArr.push(LIST()[nk]);
   }
   state.newWords = newWordsArr;
-  var expertUnlock = isVocab() && newWordsArr.indexOf(VOCAB_WORDS[VOCAB_T1]) > -1;
   saveState();
   refreshLevelLabels();
 
@@ -1643,8 +1709,9 @@ function finishRun(){
     var extra = before >= LIST().length ? "All " + LIST().length + " words are in play!" : "Practice round next: time to master the tricky ones!";
     ds.textContent = (ds.textContent ? ds.textContent + " " : "") + extra;
   }
-  if(expertUnlock){ var dsx = $("doneSub"); dsx.textContent = (dsx.textContent ? dsx.textContent + " " : "") + "Expert words unlocked!"; }
-  $("nextLevel").textContent = "Level " + state.level + " is ready";
+  }
+  if(expertUnlock){ var dsx = $("doneSub"); dsx.textContent = (dsx.textContent ? dsx.textContent + " " : "") + "You reached the Expert words!"; }
+  $("nextLevel").textContent = isVocab() ? "Next round is ready" : "Level " + state.level + " is ready";
 
   showScreen(scrDone);
   confettiBurst();
@@ -1657,12 +1724,12 @@ function finishRun(){
   });
   var gen = jokeGen;
   setTimeout(function(){
-    speak(pickPraise(starCount, kidName), 0.95).then(function(){
+    speak(pickPraise((starCount === 3 && missedList.length) ? 2 : starCount, kidName), 0.95).then(function(){
       if(gen !== jokeGen) return;
       if(conquered.length) return speak("You beat the word " + displayWord(conquered[0]) + "!", 0.95);
     }).then(function(){
       if(gen !== jokeGen) return;
-      if(expertUnlock) return speak("You finished all " + VOCAB_T1 + " starter words. Expert words unlocked!", 0.95);
+      if(expertUnlock) return speak("You made it to the expert words!", 0.95);
     }).then(function(){
       if(gen !== jokeGen) return;
       if(newWordsArr.length) return speak((newWordsArr.length > 1 ? "New words: " : "New word: ") + newWordsArr.map(displayWord).join(", ") + ",", 0.85);
@@ -1820,14 +1887,24 @@ function fatal(kind){
 var overlay = $("overlay");
 function refreshLevelLabels(){
   var P = poolSize(state.level);
-  $("titleLevel").innerHTML = "Level " + state.level + " &bull; " + P + " words" + (isVocab() && P > VOCAB_T1 ? " &bull; Expert" : "");
-  $("lvlVal").value = state.level;
-  $("lvlVal").max = maxLevel();
-  $("lvlNote").innerHTML = "Level " + state.level + " &bull; " + P + " words in play. Level changes apply to the next round.";
+  if(isVocab()){
+    var F = vFrontier(), N = VOCAB_WORDS.length;
+    $("titleLevel").innerHTML = knownCount() + " of " + N + " words learned" + (F >= VOCAB_T1 ? " &bull; Expert" : "");
+    $("lvlLabel").textContent = "Start new words at #";
+    $("lvlVal").max = N;
+    $("lvlVal").value = Math.min(N, F + 1);
+    $("lvlNote").innerHTML = F < N ? "Next new word: #" + (F + 1) + " (" + VOCAB_WORDS[F] + "). Words before it count as learned. Expert words start at #" + (VOCAB_T1 + 1) + "." : "Every word has been introduced.";
+  } else {
+    $("titleLevel").innerHTML = "Level " + state.level + " &bull; " + P + " words";
+    $("lvlLabel").textContent = "Level";
+    $("lvlVal").max = maxLevel();
+    $("lvlVal").value = state.level;
+    $("lvlNote").innerHTML = "Level " + state.level + " &bull; " + P + " words in play. Level changes apply to the next round.";
+  }
   $("secVal").textContent = state.secs + "s";
   $("nameVal").value = state.name;
   $("swHeard").classList.toggle("onn", state.showHeard);
-  chipLevel.textContent = "Lv " + state.level;
+  chipLevel.textContent = levelChipText();
   refreshPicker();
 }
 function openSettings(){ refreshLevelLabels(); fillVoices(); overlay.classList.add("on"); if(cardLive){ pauseTimer(); stopListen(); } }
@@ -1845,13 +1922,24 @@ $("secMinus").onclick = function(){ state.secs = Math.max(5, state.secs - 1); re
 $("secPlus").onclick = function(){ state.secs = Math.min(20, state.secs + 1); refreshLevelLabels(); };
 function setLevel(n){
   n = Math.round(Number(n));
+  if(isVocab()){
+    if(!isFinite(n)) n = vFrontier() + 1;
+    var idx = Math.min(VOCAB_WORDS.length, Math.max(1, n)) - 1;
+    VOCAB_WORDS.forEach(function(w, i){
+      if(i < idx){ state.known[w] = 1; state.seen[w] = 1; }
+      else { delete state.known[w]; delete state.seen[w]; delete state.miss[w]; delete state.streak[w]; }
+    });
+    state.level = Math.max(1, knownCount());
+    refreshLevelLabels();
+    return;
+  }
   if(!isFinite(n)) n = state.level;
   state.level = Math.min(maxLevel(), Math.max(1, n));
   state.newWords = [];
   refreshLevelLabels();
 }
-$("lvlMinus").onclick = function(){ setLevel(state.level - 1); };
-$("lvlPlus").onclick = function(){ setLevel(state.level + 1); };
+$("lvlMinus").onclick = function(){ setLevel((isVocab() ? vFrontier() + 1 : state.level) - 1); };
+$("lvlPlus").onclick = function(){ setLevel((isVocab() ? vFrontier() + 1 : state.level) + 1); };
 $("lvlVal").onchange = function(){ setLevel(this.value); };
 $("swHeard").onclick = function(){ state.showHeard = !state.showHeard; refreshLevelLabels(); };
 $("nameVal").oninput = function(){ state.name = this.value; refreshPicker(); };
@@ -1893,7 +1981,7 @@ $("homeGame").onclick = function(){
 $("homeDone").onclick = quitToTitle;
 $("btnReset").onclick = function(){
   if(confirm("Start " + profileName(activeProfile) + " over at Level 1?")){
-    state.level = 1; state.miss = {}; state.streak = {}; state.newWords = []; state.stuck = {}; state.seen = {}; state.originIds = [];
+    state.level = 1; state.miss = {}; state.streak = {}; state.newWords = []; state.stuck = {}; state.seen = {}; state.originIds = []; state.known = {};
     saveState(); refreshLevelLabels();
   }
 };
