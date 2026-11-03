@@ -329,7 +329,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.34 (2026-11-02)";
+var APP_VERSION = "v1.35 (2026-11-02)";
 
 var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 2;
 function isStuck(w){ return (state.stuck ? (state.stuck[w] || 0) : 0) >= STUCK_ROUNDS; }
@@ -405,7 +405,8 @@ var EQUIV = {
   "been":["bin","ben","bean"],
   "who":["hoo"],
   "find":["fined"],
-  "made":["maid"]
+  "made":["maid"],
+  "first":["forced"]
 };
 
 var DIGITS = {"1":"one","2":"two","4":"four"};
