@@ -196,6 +196,12 @@ input.lvlnum{width:84px;padding:8px 6px;}
 .switch.onn::after{left:25px;}
 .danger{background:#ffe9ec;color:#c22740;border:none;border-radius:14px;padding:12px 18px;font-family:inherit;font-weight:700;font-size:16px;cursor:pointer;}
 .closep{width:100%;margin-top:8px;}
+.mlog{margin:6px 0 4px;border:2px solid #eef3f9;border-radius:14px;max-height:220px;overflow-y:auto;}
+.mrow{display:flex;justify-content:space-between;gap:10px;padding:8px 12px;border-bottom:1px solid #eef3f9;font-size:15px;}
+.mrow:last-child{border-bottom:none;}
+.mrow b{font-size:16px;}
+.mrow span{color:#6b7a90;text-align:right;}
+.mempty{padding:10px 12px;color:#6b7a90;font-size:14px;}
 
 /* Error */
 .err h1{color:#fff;font-size:34px;margin:0 0 12px;}
@@ -321,6 +327,9 @@ input.lvlnum{width:84px;padding:8px 6px;}
       <label>Start this player over</label>
       <button class="danger" id="btnReset">Reset</button>
     </div>
+    <div class="row" style="margin-bottom:0"><label>Recently misheard</label><button class="linkish" id="btnClearLog" style="color:#2377e8;margin:0;padding:4px">Clear</button></div>
+    <p class="note" style="margin-top:0">Cards this player missed, and what the mic heard instead.</p>
+    <div class="mlog" id="missLog"></div>
     <button class="btn small closep" id="btnCloseP">Done</button>
     <p class="note" id="verTag" style="text-align:center;margin-top:10px;"></p>
   </div>
@@ -329,7 +338,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.35 (2026-11-02)";
+var APP_VERSION = "v1.36 (2026-11-02)";
 
 var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 2;
 function isStuck(w){ return (state.stuck ? (state.stuck[w] || 0) : 0) >= STUCK_ROUNDS; }
@@ -570,6 +579,7 @@ function loadProfile(p){
   if(!s.stuck) s.stuck = {};
   if(!s.seen) s.seen = {};
   if(!s.originIds) s.originIds = [];
+  if(!s.heardLog) s.heardLog = [];
   if(!s.known){ s.known = {}; if(PROFILES[p].mode === "vocab") for(var sw in s.streak) if(s.streak[sw] >= 2) s.known[sw] = 1; }
   return s;
 }
@@ -1094,6 +1104,7 @@ function vocabSaid(ok, viaHelp){
     return;
   }
   vPronMiss = true;
+  logMiss(w);
   if(!isFirstTry(w)) runFails++;
   sayBanner.textContent = "Listen...";
   sayBanner.classList.add("on");
@@ -1250,6 +1261,23 @@ function selectProfile(p){
 
 /* ---------- Recognition ---------- */
 var SRCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+var cardFinals = [], cardInterim = "";
+function resetHeard(){ cardFinals = []; cardInterim = ""; }
+function noteHeard(txt, isFinal){
+  var t = (txt || "").trim().toLowerCase();
+  if(!t) return;
+  if(isFinal){ if(cardFinals.indexOf(t) < 0) cardFinals.push(t); }
+  else cardInterim = t;
+}
+/* Remember what the mic heard when a card was missed, for the parent list */
+function logMiss(w){
+  var h = cardFinals.length ? cardFinals.slice(-3) : (cardInterim ? [cardInterim] : []);
+  resetHeard();
+  if(!h.length) return;
+  state.heardLog.unshift({ w:w, h:h, d:Date.now() });
+  if(state.heardLog.length > 40) state.heardLog = state.heardLog.slice(0, 40);
+  saveState();
+}
 var rec = null, wantListen = false, restartTO = null, asrNetFails = 0, restartsThisCard = 0;
 
 function setMicState(on){
@@ -1270,6 +1298,7 @@ function initRec(){
     var latest = "";
     for(var k = e.resultIndex; k < e.results.length; k++){
       var res = e.results[k];
+      if(res[0]) noteHeard(res[0].transcript, res.isFinal);
       for(var j = 0; j < res.length; j++){
         var txt = res[j].transcript || "";
         if(j === 0) latest = txt;
@@ -1381,6 +1410,7 @@ function nextCard(){
   currentWord = deck.shift();
   cardLive = true;
   restartsThisCard = 0;
+  resetHeard();
   runSeen[currentWord] = true;
   if(isVocab()){ showVocabSay(currentWord); return; }
   cardEl.className = "card enter";
@@ -1514,6 +1544,7 @@ function resolveFail(viaHelp){
   runFails++;
   state.miss[currentWord] = (state.miss[currentWord] || 0) + 1;
   runMissed[currentWord] = true;
+  logMiss(currentWord);
   saveState();
   var failedWord = currentWord;
   sayBanner.textContent = "Listen...";
@@ -1923,7 +1954,39 @@ function refreshLevelLabels(){
   chipLevel.textContent = levelChipText();
   refreshPicker();
 }
-function openSettings(){ refreshLevelLabels(); fillVoices(); overlay.classList.add("on"); if(cardLive){ pauseTimer(); stopListen(); } }
+function agoText(d){
+  var days = Math.floor((Date.now() - d) / 86400000);
+  return days <= 0 ? "today" : (days === 1 ? "yesterday" : days + " days ago");
+}
+function renderMissLog(){
+  var box = $("missLog"), log = state.heardLog || [], rows = [], idx = {};
+  box.innerHTML = "";
+  log.forEach(function(e){
+    var key = e.w + "|" + e.h.join("|");
+    if(idx[key] !== undefined){ rows[idx[key]].n++; return; }
+    idx[key] = rows.length;
+    rows.push({ w:e.w, h:e.h, d:e.d, n:1 });
+  });
+  if(!rows.length){
+    var em = document.createElement("div");
+    em.className = "mempty";
+    em.textContent = "Nothing yet. Misses with something heard will show up here.";
+    box.appendChild(em);
+    return;
+  }
+  rows.slice(0, 25).forEach(function(r){
+    var row = document.createElement("div"), left = document.createElement("div"), right = document.createElement("span");
+    row.className = "mrow";
+    var b = document.createElement("b");
+    b.textContent = displayWord(r.w);
+    left.appendChild(b);
+    left.appendChild(document.createTextNode(" heard as " + r.h.map(function(x){ return "“" + x + "”"; }).join(", ")));
+    right.textContent = (r.n > 1 ? r.n + "x, " : "") + agoText(r.d);
+    row.appendChild(left); row.appendChild(right);
+    box.appendChild(row);
+  });
+}
+function openSettings(){ refreshLevelLabels(); fillVoices(); renderMissLog(); overlay.classList.add("on"); if(cardLive){ pauseTimer(); stopListen(); } }
 function closeSettings(){
   overlay.classList.remove("on");
   saveState();
@@ -1933,6 +1996,7 @@ $("gearTitle").onclick = openSettings;
 $("gearGame").onclick = openSettings;
 $("gearDone").onclick = openSettings;
 $("btnCloseP").onclick = closeSettings;
+$("btnClearLog").onclick = function(){ if(confirm("Clear the misheard list for " + profileName(activeProfile) + "?")){ state.heardLog = []; saveState(); renderMissLog(); } };
 overlay.onclick = function(e){ if(e.target === overlay) closeSettings(); };
 $("secMinus").onclick = function(){ state.secs = noLimit() ? 20 : Math.max(5, state.secs - 1); refreshLevelLabels(); };
 $("secPlus").onclick = function(){ state.secs = (noLimit() || state.secs >= 20) ? 0 : state.secs + 1; refreshLevelLabels(); };
