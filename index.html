@@ -104,6 +104,7 @@ body{
 .microw{display:flex;align-items:center;gap:14px;margin-top:30px;color:#fff;font-weight:600;font-size:19px;}
 .ring{width:66px;height:66px;border-radius:50%;background:rgba(255,255,255,.25);display:grid;place-items:center;font-size:30px;}
 .ring.live{animation:pulse 1.2s infinite;}
+.ring.tap{background:var(--mango);cursor:pointer;box-shadow:0 5px 0 var(--mango-dk);}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.7);}100%{box-shadow:0 0 0 26px rgba(255,255,255,0);}}
 .heard{min-height:28px;margin-top:10px;color:rgba(255,255,255,.9);font-size:18px;font-style:italic;}
 
@@ -328,7 +329,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.33 (2026-10-28)";
+var APP_VERSION = "v1.34 (2026-11-02)";
 
 var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 2;
 function isStuck(w){ return (state.stuck ? (state.stuck[w] || 0) : 0) >= STUCK_ROUNDS; }
@@ -558,7 +559,7 @@ try{ var savedActive = localStorage.getItem(ACTIVE_KEY); if(savedActive && PROFI
 function loadProfile(p){
   var s = readKey(PROFILES[p].key) || { level:1, miss:{}, secs:10, showHeard:true, name:PROFILES[p].name };
   if(!s.miss) s.miss = {};
-  if(!s.secs) s.secs = 10;
+  if(typeof s.secs !== "number") s.secs = 10; /* 0 means no time limit */
   if(s.showHeard === undefined) s.showHeard = true;
   if(s.name === undefined) s.name = PROFILES[p].name;
   if(!s.jokeIds) s.jokeIds = [];
@@ -1252,6 +1253,7 @@ var rec = null, wantListen = false, restartTO = null, asrNetFails = 0, restartsT
 
 function setMicState(on){
   ringEl.classList.toggle("live", on);
+  if(on) ringEl.classList.remove("tap");
   micLabel.textContent = on ? "Listening..." : "One sec...";
 }
 function initRec(){
@@ -1289,9 +1291,19 @@ function initRec(){
       restartsThisCard++;
       clearTimeout(restartTO);
       restartTO = setTimeout(function(){ try{ rec.start(); }catch(e){} }, 400);
+    } else if(wantListen && cardLive && noLimit() && !warmMode && !remedyMode){
+      micLabel.textContent = "Tap the mic to listen";
+      ringEl.classList.add("tap");
     }
   };
 }
+ringEl.onclick = function(){
+  if(!cardLive || !ringEl.classList.contains("tap")) return;
+  ensureAudio();
+  ringEl.classList.remove("tap");
+  restartsThisCard = 0;
+  startListen();
+};
 function startListen(){
   wantListen = true;
   clearTimeout(restartTO);
@@ -1310,8 +1322,11 @@ function showHeard(txt){
 
 /* ---------- Timer ---------- */
 var cardMs = 0, timerInt = null, timerRunning = false;
+function noLimit(){ return state.secs === 0; }
 function startTimer(){
   clearInterval(timerInt);
+  ringEl.classList.remove("tap");
+  if(noLimit()){ cardMs = Infinity; timerRunning = true; tfill.style.width = "100%"; return; }
   cardMs = state.secs * 1000;
   timerRunning = true;
   updateTimerBar();
@@ -1901,7 +1916,7 @@ function refreshLevelLabels(){
     $("lvlVal").value = state.level;
     $("lvlNote").innerHTML = "Level " + state.level + " &bull; " + P + " words in play. Level changes apply to the next round.";
   }
-  $("secVal").textContent = state.secs + "s";
+  $("secVal").textContent = noLimit() ? "No limit" : state.secs + "s";
   $("nameVal").value = state.name;
   $("swHeard").classList.toggle("onn", state.showHeard);
   chipLevel.textContent = levelChipText();
@@ -1918,8 +1933,8 @@ $("gearGame").onclick = openSettings;
 $("gearDone").onclick = openSettings;
 $("btnCloseP").onclick = closeSettings;
 overlay.onclick = function(e){ if(e.target === overlay) closeSettings(); };
-$("secMinus").onclick = function(){ state.secs = Math.max(5, state.secs - 1); refreshLevelLabels(); };
-$("secPlus").onclick = function(){ state.secs = Math.min(20, state.secs + 1); refreshLevelLabels(); };
+$("secMinus").onclick = function(){ state.secs = noLimit() ? 20 : Math.max(5, state.secs - 1); refreshLevelLabels(); };
+$("secPlus").onclick = function(){ state.secs = (noLimit() || state.secs >= 20) ? 0 : state.secs + 1; refreshLevelLabels(); };
 function setLevel(n){
   n = Math.round(Number(n));
   if(isVocab()){
