@@ -338,7 +338,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.38 (2026-11-10)";
+var APP_VERSION = "v1.39 (2026-11-15)";
 
 var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 2;
 function isStuck(w){ return (state.stuck ? (state.stuck[w] || 0) : 0) >= STUCK_ROUNDS; }
@@ -736,9 +736,33 @@ function showScreen(el){
 function setSession(t){
   try{ if(navigator.audioSession && navigator.audioSession.type !== t) navigator.audioSession.type = t; }catch(e){}
 }
+var IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+/* iOS: a tiny silent clip played through an audio element switches the page to media playback,
+   which is what lets the speaking voice ignore silent mode. Unlocked on the first tap, replayed before speech. */
+var silentClip = null;
+function silentWavUrl(){
+  /* 0.1 s of silence: 8 kHz, mono, 8-bit WAV built in memory */
+  var n = 800, b = new Uint8Array(44 + n), dv = new DataView(b.buffer), k;
+  var str = function(o, t){ for(k = 0; k < t.length; k++) b[o + k] = t.charCodeAt(k); };
+  str(0, "RIFF"); dv.setUint32(4, 36 + n, true); str(8, "WAVE"); str(12, "fmt ");
+  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+  dv.setUint32(24, 8000, true); dv.setUint32(28, 8000, true); dv.setUint16(32, 1, true); dv.setUint16(34, 8, true);
+  str(36, "data"); dv.setUint32(40, n, true);
+  for(k = 44; k < 44 + n; k++) b[k] = 128;
+  return URL.createObjectURL(new Blob([b], { type: "audio/wav" }));
+}
+function playSilentClip(){
+  if(!IS_IOS) return;
+  try{
+    if(!silentClip){ silentClip = new Audio(silentWavUrl()); silentClip.setAttribute("playsinline", ""); }
+    silentClip.currentTime = 0;
+    var p = silentClip.play(); if(p && p.catch) p.catch(function(){});
+  }catch(e){}
+}
 var AC = null;
 function ensureAudio(){
   setSession(wantListen ? "play-and-record" : "playback");
+  if(!wantListen) playSilentClip();
   if(!AC){
     try{ AC = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){}
   }
@@ -791,7 +815,30 @@ function fillVoices(){
   }
   sel.innerHTML = html;
 }
+/* iOS keeps call-style audio (quiet voice) until the mic has actually shut off, so wait for that first. */
+var recLive = false, micEndWaiters = [];
+function micIdle(){
+  if(!IS_IOS || !recLive) return Promise.resolve();
+  return new Promise(function(res){
+    var done = false, fin = function(){ if(!done){ done = true; res(); } };
+    micEndWaiters.push(fin);
+    setTimeout(fin, 900);
+  });
+}
+function prepSpeech(){
+  if(!IS_IOS) return Promise.resolve();
+  return micIdle().then(function(){
+    if(wantListen) return;
+    setSession("playback");
+    playSilentClip();
+    return wait(120);
+  });
+}
 function speak(text, rate, onstart){
+  if(IS_IOS) return prepSpeech().then(function(){ return speakNow(text, rate, onstart); });
+  return speakNow(text, rate, onstart);
+}
+function speakNow(text, rate, onstart){
   return new Promise(function(resolve){
     if(!window.speechSynthesis){ setTimeout(resolve, 900); return; }
     var done = false;
@@ -1298,7 +1345,7 @@ function initRec(){
   rec.interimResults = true;
   rec.maxAlternatives = 5;
   rec.continuous = true;
-  rec.onstart = function(){ setMicState(true); };
+  rec.onstart = function(){ recLive = true; setMicState(true); };
   rec.onresult = function(e){
     if(!cardLive) return;
     var latest = "";
@@ -1322,6 +1369,8 @@ function initRec(){
     }
   };
   rec.onend = function(){
+    recLive = false;
+    var ws = micEndWaiters; micEndWaiters = []; ws.forEach(function(f){ f(); });
     setMicState(false);
     if(wantListen && cardLive && (warmMode || remedyMode || cardMs > 1500) && restartsThisCard < 2){
       restartsThisCard++;
