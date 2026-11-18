@@ -302,7 +302,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
       <label>Player name</label>
       <input class="txt" id="nameVal" maxlength="14">
     </div>
-    <div class="row">
+    <div class="row" id="voiceRow">
       <label>Voice</label>
       <select class="txt vsel" id="voiceSel"></select>
     </div>
@@ -338,7 +338,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.40 (2026-11-17)";
+var APP_VERSION = "v1.41 (2026-11-17)";
 
 var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 2;
 function isStuck(w){ return (state.stuck ? (state.stuck[w] || 0) : 0) >= STUCK_ROUNDS; }
@@ -837,7 +837,112 @@ function prepSpeech(){
     return wait(120);
   });
 }
-function speak(text, rate, onstart){
+/* ---------- Recorded voice ----------
+   Henry's spoken lines are recorded clips played through Web Audio, the same path as the sound effects.
+   iOS treats that path as media: full volume, and it ignores the silent switch.
+   The built-in voice is only a fallback (and is still used for Poppy's parked vocab mode). */
+var CLIP_BASE = "audio/", clipSet = null, clipCore = [], clipBufs = {}, clipLoads = {}, clipSrcs = [], clipIndexP = null;
+function clipSlug(t){ return String(t).toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""); }
+function loadClipIndex(){
+  if(!window.fetch){ clipIndexP = Promise.resolve(); return; }
+  clipIndexP = fetch(CLIP_BASE + "index.json", { cache: "no-cache" }).then(function(r){ return r.json(); }).then(function(d){
+    var set = {}; (d.clips || []).forEach(function(p){ set[p] = 1; });
+    clipSet = set; clipCore = d.core || [];
+  }).catch(function(){});
+}
+function getAC(){
+  if(!AC){ try{ AC = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){} }
+  return AC;
+}
+function loadClip(p){
+  if(clipBufs[p]) return Promise.resolve(clipBufs[p]);
+  if(clipLoads[p]) return clipLoads[p];
+  var ac = getAC();
+  if(!ac || !window.fetch) return Promise.resolve(null);
+  clipLoads[p] = fetch(CLIP_BASE + p + ".mp3").then(function(r){
+    if(!r.ok) throw new Error("http " + r.status);
+    return r.arrayBuffer();
+  }).then(function(ab){
+    return new Promise(function(res, rej){ ac.decodeAudioData(ab, res, rej); });
+  }).then(function(buf){ clipBufs[p] = buf; return buf; }).catch(function(){ delete clipLoads[p]; return null; });
+  return clipLoads[p];
+}
+function preloadClips(list){ list.forEach(function(p){ if(clipSet && clipSet[p]) loadClip(p); }); }
+function wordClip(w, slow){ return (slow ? "s/" : "w/") + clipSlug(w); }
+function wordClips(w){
+  return [wordClip(w, false), wordClip(w, true),
+    "p/" + clipSlug("Which one says " + sayForm(w) + "?"),
+    "p/" + clipSlug("This one says " + sayForm(w) + "."),
+    "p/" + clipSlug("You beat the word " + displayWord(w) + "!")];
+}
+function preloadRound(){
+  if(isVocab() || !clipIndexP) return;
+  clipIndexP.then(function(){
+    if(!clipSet || isVocab()) return;
+    var list = clipCore.slice(), have = {}, P = poolSize(state.level);
+    deck.concat(roundStuck, LIST().slice(P, P + 3)).forEach(function(w){
+      if(have[w]) return; have[w] = 1; list = list.concat(wordClips(w));
+    });
+    if(jokeReady) splitJoke(jokeReady.text).forEach(function(t){ if(t) list.push("p/" + clipSlug(t)); });
+    preloadClips(list);
+  });
+}
+function clipFor(text, rate, word){
+  if(!clipSet || isVocab()) return null;
+  var p = word ? wordClip(word, !!rate && rate <= 0.5) : "p/" + clipSlug(text);
+  if(clipSet[p]) return p;
+  var nm = (state.name || "").trim();
+  if(!word && nm && text.indexOf(nm) > -1){
+    p = "p/" + clipSlug(text.split(nm).join("champ"));
+    if(clipSet[p]) return p;
+  }
+  return null;
+}
+function stopClips(){
+  var list = clipSrcs; clipSrcs = [];
+  list.forEach(function(x){ try{ x.onended = null; x.stop(); }catch(e){} if(x._fin) x._fin(); });
+}
+function stopSpeech(){
+  stopClips();
+  if(window.speechSynthesis){ try{ speechSynthesis.cancel(); }catch(e){} }
+}
+/* On iOS, wait until the mic has fully shut off so the clip plays as media, not call audio. */
+function clipReady(){
+  if(!IS_IOS) return Promise.resolve();
+  return micIdle().then(function(){ if(!wantListen) setSession("playback"); });
+}
+function playClip(p, onstart){
+  return Promise.race([loadClip(p), wait(4000).then(function(){ return null; })]).then(function(buf){
+    if(!buf || !AC) return false;
+    if(AC.state === "suspended"){ try{ AC.resume(); }catch(e){} }
+    stopClips();
+    if(window.speechSynthesis && (speechSynthesis.speaking || speechSynthesis.pending)){ try{ speechSynthesis.cancel(); }catch(e){} }
+    return new Promise(function(resolve){
+      var src = AC.createBufferSource(), done = false;
+      var fin = function(){
+        if(done) return; done = true;
+        var i = clipSrcs.indexOf(src); if(i > -1) clipSrcs.splice(i, 1);
+        resolve(true);
+      };
+      src._fin = fin;
+      src.buffer = buf;
+      src.connect(AC.destination);
+      src.onended = fin;
+      clipSrcs.push(src);
+      try{ src.start(0); }catch(e){ fin(); return; }
+      if(onstart){ try{ onstart(); }catch(se){} }
+      setTimeout(fin, buf.duration * 1000 + 1500);
+    });
+  });
+}
+function speak(text, rate, onstart, word){
+  var p = clipFor(text, rate, word);
+  if(!p) return speakTTS(text, rate, onstart);
+  return clipReady().then(function(){ return playClip(p, onstart); }).then(function(ok){
+    if(!ok) return speakTTS(text, rate, onstart);
+  });
+}
+function speakTTS(text, rate, onstart){
   if(IS_IOS) return prepSpeech().then(function(){ return speakNow(text, rate, onstart); });
   return speakNow(text, rate, onstart);
 }
@@ -874,7 +979,7 @@ function ttsUnlock(){
 }
 var TTS_SAY = { "have": "hav" };
 function sayForm(w){ return TTS_SAY[w] || w; }
-function speakWord(w, rate){ return speak(sayForm(w) + ",", rate); }
+function speakWord(w, rate){ return speak(sayForm(w) + ",", rate, null, w); }
 
 /* ---------- Sound mapping (orthographic mapping + heart words) ---------- */
 /* * = heart (tricky) part, ~ = quiet letter */
@@ -963,13 +1068,13 @@ function pulseHearts(){
 /* Speak the word, measure how long it takes, then say it slowly while the sound chunks light up. */
 function mapDemo(w, g){
   var t0 = 0, dur = 900;
-  return speak(sayForm(w) + ",", 0.8, function(){ t0 = performance.now(); }).then(function(){
+  return speak(sayForm(w) + ",", 0.8, function(){ t0 = performance.now(); }, w).then(function(){
     if(t0) dur = Math.max(400, performance.now() - t0);
     return wait(350);
   }).then(function(){
     if(g !== jokeGen) return;
     var slowMs = Math.min(3500, Math.max(900, dur * 1.7));
-    return speak(sayForm(w) + ",", 0.45, function(){ lightChunks(slowMs * 0.85); });
+    return speak(sayForm(w) + ",", 0.45, function(){ lightChunks(slowMs * 0.85); }, w);
   }).then(function(){
     if(g !== jokeGen) return;
     var els = chunkEls(); for(var k = 0; k < els.length; k++) els[k].classList.add("lit");
@@ -1451,7 +1556,7 @@ function updateHud(){
 }
 function startGame(){
   jokeGen++;
-  if(window.speechSynthesis){ try{ speechSynthesis.cancel(); }catch(e){} }
+  stopSpeech();
   $("jokeCard").style.display = "none";
   $("jokePunch").classList.remove("show");
   $("btnAgain").classList.remove("pulse");
@@ -1462,6 +1567,7 @@ function startGame(){
   asrNetFails = 0;
   showScreen(scrGame);
   if(isVocab()){ markRoundNew(); nextCard(); return; }
+  preloadRound();
   if(roundStuck.length) startWarmup(); else nextCard();
 }
 function nextCard(){
@@ -1689,6 +1795,12 @@ function remedyEnd(ok, g){
     speakWord(w, 0.85).then(function(){ return wait(400); }).then(after);
   }
 }
+function sayNewWords(arr, gen){
+  if(!clipFor("New word:", 1)) return speak((arr.length > 1 ? "New words: " : "New word: ") + arr.map(displayWord).join(", ") + ",", 0.85);
+  var pr = speak(arr.length > 1 ? "New words:" : "New word:", 1);
+  arr.forEach(function(w){ pr = pr.then(function(){ if(gen !== jokeGen) return; return wait(200).then(function(){ return speakWord(w, 0.85); }); }); });
+  return pr;
+}
 var PRAISE3 = ["Perfect round, NAME! You are a superstar!", "Wow, NAME! Every single word on the first try!", "Incredible, NAME! Three stars!"];
 var PRAISE2 = ["You did it, NAME! Great job!", "Awesome work, NAME! You cleared every card!", "High five, NAME! Round complete!"];
 var PRAISE1 = ["You finished, NAME! Way to keep going!", "Nice work, NAME! You never gave up!", "Round done, NAME! You are getting stronger!"];
@@ -1840,7 +1952,7 @@ function finishRun(){
       if(expertUnlock) return speak("You made it to the expert words!", 0.95);
     }).then(function(){
       if(gen !== jokeGen) return;
-      if(newWordsArr.length) return speak((newWordsArr.length > 1 ? "New words: " : "New word: ") + newWordsArr.map(displayWord).join(", ") + ",", 0.85);
+      if(newWordsArr.length) return sayNewWords(newWordsArr, gen);
     }).then(function(){
       if(gen !== jokeGen) return;
       return wait(500);
@@ -1871,7 +1983,47 @@ var FALLBACK_JOKES = [
   {id:"f12", text:"What is a cat's favorite color? Purr-ple."},
   {id:"f13", text:"Why do bees have sticky hair? Because they use honeycombs."},
   {id:"f14", text:"What did the ocean say to the beach? Nothing, it just waved."},
-  {id:"f15", text:"Why did the student eat his homework? Because the teacher said it was a piece of cake."}
+  {id:"f15", text:"Why did the student eat his homework? Because the teacher said it was a piece of cake."},
+  {id:"j16", text:"Why did the cookie go to the nurse? Because it felt crummy."},
+  {id:"j17", text:"Why can't a bicycle stand up by itself? Because it is two tired."},
+  {id:"j18", text:"What did one wall say to the other wall? I'll meet you at the corner."},
+  {id:"j19", text:"What do you call a pig that does karate? A pork chop."},
+  {id:"j20", text:"Why did the teddy bear say no to dessert? Because she was stuffed."},
+  {id:"j21", text:"What has four wheels and flies? A garbage truck."},
+  {id:"j22", text:"What do you call a train carrying bubblegum? A chew chew train."},
+  {id:"j23", text:"Why do fish live in salt water? Because pepper makes them sneeze."},
+  {id:"j24", text:"What did the zero say to the eight? Nice belt!"},
+  {id:"j25", text:"How do you make an octopus laugh? With ten tickles."},
+  {id:"j26", text:"Why did the scarecrow win an award? Because he was outstanding in his field."},
+  {id:"j27", text:"What kind of shoes do frogs wear? Open toad shoes."},
+  {id:"j28", text:"Why was the broom late? It over swept."},
+  {id:"j29", text:"Why did the kid bring a ladder to school? Because he wanted to go to high school."},
+  {id:"j30", text:"What is a snake's favorite subject? Hiss-tory."},
+  {id:"j31", text:"What do you get when you cross a snowman and a dog? Frostbite."},
+  {id:"j32", text:"How do you talk to a giant? Use big words."},
+  {id:"j33", text:"What did the big flower say to the little flower? Hi, bud!"},
+  {id:"j34", text:"Why do cows wear bells? Because their horns do not work."},
+  {id:"j35", text:"Where do fish keep their money? In the riverbank."},
+  {id:"j36", text:"What room can no one go into? A mushroom."},
+  {id:"j37", text:"Why did the tomato turn red? Because it saw the salad dressing."},
+  {id:"j38", text:"What do you call a sleeping bull? A bulldozer."},
+  {id:"j39", text:"What do you call a boomerang that will not come back? A stick."},
+  {id:"j40", text:"What do you call a bear in the rain? A drizzly bear."},
+  {id:"j41", text:"Why are fish so smart? Because they live in schools."},
+  {id:"j42", text:"What did the duck say when it bought a snack? Put it on my bill."},
+  {id:"j43", text:"What kind of music do mummies like? Wrap music."},
+  {id:"j44", text:"What do sea monsters eat? Fish and ships."},
+  {id:"j45", text:"What do you call a lazy kangaroo? A pouch potato."},
+  {id:"j46", text:"What is brown and sticky? A stick."},
+  {id:"j47", text:"Why did the music teacher need a ladder? To reach the high notes."},
+  {id:"j48", text:"What do you call a dog that can tell time? A watch dog."},
+  {id:"j49", text:"Why did the egg hide? Because it was a little chicken."},
+  {id:"j50", text:"What did the pancake say to the butter? You're on top of things."},
+  {id:"j51", text:"Why did the robot go on vacation? To recharge its batteries."},
+  {id:"j52", text:"What do you call an alligator in a vest? An investigator."},
+  {id:"j53", text:"What is a tree's favorite drink? Root beer."},
+  {id:"j54", text:"Why did the sun go to school? To get brighter."},
+  {id:"j55", text:"What do you call a snowman in summer? A puddle."}
 ];
 var BLOCKWORDS = /\b(sex|sexy|beer|wine|vodka|whiskey|whisky|drunk|hell|damn|kill|killed|murder|gun|guns|shoot|shot|drug|drugs|cigarette|smoking|naked|porn|die|dies|died|dead|death|divorce|suicide)\b/i;
 function kidSafe(t){ return !BLOCKWORDS.test(t); }
@@ -1896,12 +2048,15 @@ function fetchJoke(attempt){
       return { id: d.id, text: d.joke };
     });
 }
+/* Jokes come from a fixed list with recorded audio (no internet joke service), least recently told first */
 function primeJoke(){
-  fetchJoke(0).then(function(j){ jokeReady = j; }).catch(function(){ jokeReady = null; });
+  var fresh = FALLBACK_JOKES.filter(function(j){ return state.jokeIds.indexOf(j.id) < 0; });
+  if(!fresh.length) fresh = FALLBACK_JOKES;
+  jokeReady = fresh[Math.floor(Math.random() * fresh.length)];
 }
 function rememberJoke(j){
   state.jokeIds.push(j.id);
-  if(state.jokeIds.length > 60) state.jokeIds = state.jokeIds.slice(-60);
+  if(state.jokeIds.length > 40) state.jokeIds = state.jokeIds.slice(-40);
   saveState();
 }
 function wait(ms){ return new Promise(function(res){ setTimeout(res, ms); }); }
@@ -2009,6 +2164,7 @@ function refreshLevelLabels(){
     $("lvlVal").value = state.level;
     $("lvlNote").innerHTML = "Level " + state.level + " &bull; " + P + " words in play. Level changes apply to the next round.";
   }
+  $("voiceRow").style.display = isVocab() ? "" : "none";
   $("secVal").textContent = noLimit() ? "No limit" : state.secs + "s";
   $("nameVal").value = state.name;
   $("swHeard").classList.toggle("onn", state.showHeard);
@@ -2104,7 +2260,7 @@ function quitToTitle(){
   clearTimeout(warmTO);
   clearTimeout(remedyTO);
   clearTimer(); stopListen();
-  if(window.speechSynthesis){ try{ speechSynthesis.cancel(); }catch(e){} }
+  stopSpeech();
   sayBanner.classList.remove("on");
   refreshLevelLabels();
   showScreen(scrTitle);
@@ -2157,6 +2313,7 @@ document.addEventListener("visibilitychange", function(){
   else { resumeTimer(); startListen(); }
 });
 
+loadClipIndex();
 refreshLevelLabels();
 $("verTag").textContent = "Word Frenzy " + APP_VERSION;
 </script>
