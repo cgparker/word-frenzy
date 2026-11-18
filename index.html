@@ -338,7 +338,7 @@ input.lvlnum{width:84px;padding:8px 6px;}
 <script>
 "use strict";
 
-var APP_VERSION = "v1.39 (2026-11-15)";
+var APP_VERSION = "v1.40 (2026-11-17)";
 
 var STRUGGLE_SOFT = 3, STRUGGLE_HARD = 5, STRUGGLE_DECK_MAX = 4, CONF_MIN = 6, STUCK_ROUNDS = 2;
 function isStuck(w){ return (state.stuck ? (state.stuck[w] || 0) : 0) >= STUCK_ROUNDS; }
@@ -566,6 +566,9 @@ function writeKey(k, v){
 }
 var activeProfile = "henry";
 try{ var savedActive = localStorage.getItem(ACTIVE_KEY); if(savedActive && PROFILES[savedActive]) activeProfile = savedActive; }catch(e){}
+/* Poppy's vocab mode is parked for now: sight words only. Set to true to bring her player back (her progress is kept). */
+var SHOW_POPPY = false;
+if(!SHOW_POPPY) activeProfile = "henry";
 function loadProfile(p){
   var s = readKey(PROFILES[p].key) || { level:1, miss:{}, secs:10, showHeard:true, name:PROFILES[p].name };
   if(!s.miss) s.miss = {};
@@ -1296,6 +1299,7 @@ function profileName(p){
   return (s && (s.name || "").trim()) || PROFILES[p].name;
 }
 function refreshPicker(){
+  $("picker").style.display = SHOW_POPPY ? "" : "none";
   ["henry", "poppy"].forEach(function(p){
     var b = $(p === "henry" ? "pickHenry" : "pickPoppy");
     b.textContent = profileName(p);
